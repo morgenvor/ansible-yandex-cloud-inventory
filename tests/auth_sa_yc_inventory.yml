@@ -1,0 +1,5 @@
+# Ключ и токен заданы одновременно: ключ сервисного аккаунта должен победить.
+plugin: yandex_cloud_inventory
+folder_id: b1gfakefolder00000000
+service_account_key_file: tests/fake_sa_key.json
+iam_token: fake-iam-token-should-lose

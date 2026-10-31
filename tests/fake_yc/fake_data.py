@@ -56,6 +56,61 @@ NO_NIC = [
     ),
 ]
 
+# Сценарий NIC без адреса: интерфейс есть, primary_v4_address = None.
+# Плагин раньше падал на этом с AttributeError и отдавал пустой inventory.
+NIC_NO_V4 = [
+    _vm("nov4-vm", "ru-central1-a", {}, internal=None, interfaces=[NS(primary_v4_address=None)]),
+    _vm(
+        "healthy-vm",
+        "ru-central1-a",
+        {"ansible_group": "docker"},
+        internal="10.0.4.9",
+        external="178.154.248.99",
+    ),
+]
+
+# Сценарий коллизии имён хостов: `web-1` и `web_1` дают один и тот же хост
+# `web_1`, раньше вторая ВМ молча вытесняла первую.
+COLLIDE = [
+    _vm("web-1", "ru-central1-a", {}, internal="10.0.7.1"),
+    _vm("web_1", "ru-central1-a", {}, internal="10.0.7.2"),
+]
+
+# Сценарий инъекции через метки: ВМ пытается подменить адрес подключения и
+# подсунуть команду контроллеру. Метки — недоверенные данные: применяться
+# должны только yc_label_* и белый список (ansible_user).
+INJECT = [
+    _vm(
+        "inject-vm",
+        "ru-central1-a",
+        {
+            "ansible_host": "203.0.113.99",
+            "ansible_ssh_common_args": "-o ProxyCommand=touch /tmp/pwned",
+            "ansible_user": "deploy",
+        },
+        internal="10.0.5.1",
+        external="178.154.248.50",
+    ),
+    _vm(
+        "control-vm",
+        "ru-central1-a",
+        {"env": "prod"},
+        internal="10.0.5.2",
+        external="178.154.248.51",
+    ),
+]
+
+# Сценарий белого списка: ansible_user/ansible_port применяются как служебные
+# переменные, прочие ansible_* — только как yc_label_*.
+WHITELIST = [
+    _vm(
+        "wl-vm",
+        "ru-central1-a",
+        {"ansible_user": "deploy", "ansible_port": "2222", "ansible_bad_arg": "x"},
+        internal="10.0.6.1",
+    ),
+]
+
 # Сценарий для проверки постраничной выдачи: 150 ВМ, две страницы.
 PAGED = [
     _vm(

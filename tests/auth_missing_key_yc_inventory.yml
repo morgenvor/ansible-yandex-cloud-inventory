@@ -1,0 +1,4 @@
+# Путь к ключу указан, файла нет: плагин обязан упасть с внятной ошибкой.
+plugin: yandex_cloud_inventory
+folder_id: b1gfakefolder00000000
+service_account_key_file: tests/absent_sa_key.json
