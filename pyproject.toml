@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ansible-yandex-cloud-inventory"
-version = "1.0.0"
+version = "1.0.1"
 description = "Ansible dynamic inventory plugin for Yandex Cloud"
 readme = "README.md"
 license = {text = "MIT"}
@@ -12,7 +12,7 @@ authors = [
     {name = "Maksim Zatolokin", email = "max.zatol@gmail.com"}
 ]
 maintainers = [
-    {name = "Maksim Zatolokin", email = "max.zatol@gmail.com"}
+    {name = "morgenvor"}
 ]
 keywords = ["ansible", "inventory", "yandex", "cloud", "dynamic"]
 classifiers = [
@@ -36,10 +36,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/mzatolokine/ansible-yandex-cloud-inventory"
-Documentation = "https://github.com/mzatolokin/ansible-yandex-cloud-inventory#readme"
-Repository = "https://github.com/mzatolokin/ansible-yandex-cloud-inventory.git"
-Issues = "https://github.com/mzatolokin/ansible-yandex-cloud-inventory/issues"
+Homepage = "https://github.com/morgenvor/ansible-yandex-cloud-inventory"
+Documentation = "https://github.com/morgenvor/ansible-yandex-cloud-inventory#readme"
+Repository = "https://github.com/morgenvor/ansible-yandex-cloud-inventory.git"
+Issues = "https://github.com/morgenvor/ansible-yandex-cloud-inventory/issues"
+Upstream = "https://github.com/mzatolokin/ansible-yandex-cloud-inventory"
 
 [project.optional-dependencies]
 dev = [
