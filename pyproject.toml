@@ -55,6 +55,10 @@ dev = [
 # No scripts needed for this package
 
 [project.entry-points."ansible.plugins.inventory"]
+# Запись сохранена для совместимости с упаковкой upstream, но ansible-core 2.19
+# entry points для inventory-плагинов НЕ читает (проверено): плагин должен
+# лежать в каталоге из `inventory_plugins` ([defaults] ansible.cfg) или
+# ANSIBLE_INVENTORY_PLUGINS. См. README, раздел «Через pip install».
 yandex_cloud_inventory = "inventory_plugins.yandex_cloud_inventory:InventoryModule"
 
 [tool.setuptools.packages.find]

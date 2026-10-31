@@ -54,6 +54,26 @@ pip install -r requirements.txt
 export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 ```
 
+### Через `pip install` (и почему одного этого мало)
+
+```bash
+pip install .
+```
+
+Пакет встанет в `site-packages` и будет виден как Python-модуль, но
+**Ansible не найдёт плагин автоматически**: ansible-core (проверено на 2.19)
+загружает inventory-плагины только из каталогов плагинов и коллекций, а запись
+`entry_points` из `pyproject.toml` не читает. Поэтому после установки укажите
+Ansible на каталог плагина внутри окружения:
+
+```bash
+# путь внутри venv/site-packages, где лежит установленный inventory_plugins/
+export ANSIBLE_INVENTORY_PLUGINS="$(python -c 'import inventory_plugins, os; print(os.path.dirname(inventory_plugins.__file__))')"
+```
+
+Проще всего — работать из исходников и держать `inventory_plugins = ./inventory_plugins`
+в `[defaults]` своего `ansible.cfg` (так устроен этот репозиторий).
+
 ## Конфигурация
 
 ### Аутентификация

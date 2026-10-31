@@ -22,6 +22,8 @@ class _FakeInstanceClient:
             instances = fake_data.NO_NIC
         elif scenario == "paged":
             instances = fake_data.PAGED
+        elif scenario == "case_labels":
+            instances = fake_data.CASE_LABELS
         else:
             instances = fake_data.DEFAULT
 

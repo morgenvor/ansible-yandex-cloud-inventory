@@ -20,12 +20,12 @@ def _vm(name, zone, labels, internal, external=None, interfaces=None):
     return NS(name=name, zone_id=zone, labels=labels, network_interfaces=interfaces)
 
 
-# Сценарий по умолчанию: 3 обычные ВМ + 1 исключённая меткой ansible=false.
+# Сценарий по умолчанию: 2 обычные ВМ + 1 исключённая меткой ansible=false.
 DEFAULT = [
     _vm(
         "docker-server",
         "ru-central1-a",
-        {"ansible_group": "docker", "env": "prod", "role": "web-app"},
+        {"ansible_group": "docker", "env": "prod", "role": "web-app", "owner-team": "platform"},
         internal="10.0.0.5",
         external="178.154.248.236",
     ),
@@ -66,4 +66,14 @@ PAGED = [
         external=f"178.154.{i // 250}.{i % 250}",
     )
     for i in range(150)
+]
+
+# Сценарий фильтра по метке ansible: проверяем, что сравнение не зависит
+# от регистра значения (фикс №7). Контрольная ВМ с ansible=true должна остаться.
+CASE_LABELS = [
+    _vm("stay-vm", "ru-central1-a", {"ansible": "true"}, internal="10.0.3.1"),
+    _vm("skip_lower", "ru-central1-a", {"ansible": "false"}, internal="10.0.3.2"),
+    _vm("skip_upper", "ru-central1-a", {"ansible": "FALSE"}, internal="10.0.3.3"),
+    _vm("skip_title", "ru-central1-a", {"ansible": "False"}, internal="10.0.3.4"),
+    _vm("stay_nolabel", "ru-central1-a", {"env": "prod"}, internal="10.0.3.5"),
 ]
