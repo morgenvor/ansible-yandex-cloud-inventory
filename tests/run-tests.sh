@@ -79,6 +79,18 @@ for host in sorted(data):
         print(f"{host} {key}")
 '
 }
+# hostgroups <json> — строки «group host» по всем группам (проверка зон).
+hostgroups() {
+    printf '%s' "$1" | python3 -c '
+import json, sys
+data = json.load(sys.stdin)
+for group in sorted(data):
+    if group.startswith("_"):
+        continue
+    for host in sorted(data[group].get("hosts", [])):
+        print(f"{group} {host}")
+'
+}
 # hostcount <json> — сколько хостов попало в inventory.
 hostcount() {
     printf '%s' "$1" | python3 -c '
@@ -145,6 +157,12 @@ expect_in "у ВМ 'web-1' и 'web_1' совпадает имя хоста 'web_
 expect_line "1" "$(hostcount "$JSON")"
 # Поведение прежнее: остаётся последняя ВМ (по порядку ответа API).
 expect_line "web_1 ansible_host = 10.0.7.2" "$(hostvars "$JSON" web_1)"
+# И хост не остаётся в зоне вытесненной ВМ: снятый хост не должен жить
+# в двух зонах сразу.
+HOSTGROUPS="$(hostgroups "$JSON")"
+printf '%s\n' "$HOSTGROUPS"
+expect_no_line "ru_central1_a web_1" "$HOSTGROUPS"
+expect_line "ru_central1_b web_1" "$HOSTGROUPS"
 
 echo
 echo "=== 5. Инъекция метками: ansible_host/ansible_ssh_common_args не применяются ==="

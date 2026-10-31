@@ -211,7 +211,13 @@ class InventoryModule(BaseInventoryPlugin):
                 )
                 continue
 
-            # Добавляем хост
+            # Добавляем хост. local patch: если имя уже занято другой ВМ, прежний
+            # хост снимаем целиком (remove_host убирает его из всех групп), иначе
+            # он остаётся в группе зоны предыдущей ВМ — хост «жил» сразу в двух
+            # зонах. Снимаем только перед реальным добавлением: ВМ, пропущенная
+            # выше по continue, не должна стирать уже добавленный хост.
+            if self.inventory.get_host(host_name):
+                self.inventory.remove_host(self.inventory.get_host(host_name))
             self.inventory.add_host(host_name)
 
             # Служебные переменные. Переопределить их метками нельзя по
