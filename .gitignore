@@ -1,3 +1,26 @@
+# Секреты — никогда в git: ключи сервисного аккаунта, токены, реальные folder_id.
+# Примеры (examples/) содержат только плейсхолдеры вида <YOUR_...>.
+secrets/
+service-account*.json
+sa-*.json
+*sa-key*.json
+*.pem
+*.key
+.env
+.venv
+env/
+venv/
+# Артефакты стенда: кэш uv и ANSIBLE_HOME из tests/run-tests.sh.
+.uv-cache/
+.ansible-home/
+# Реальные inventory-файлы с folder_id/токенами держим вне git.
+# Исключения ниже обязательны: тестовые фикстуры и пример — это не секреты,
+# и без них стенд tests/run-tests.sh не запустится у клонировавшего форк.
+yc_inventory.yml
+inventory.yml
+!tests/yc_inventory.yml
+!examples/yc_inventory.yml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
