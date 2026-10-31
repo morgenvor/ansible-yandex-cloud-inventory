@@ -277,7 +277,7 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 NIC без IPv4, коллизия имён хостов, инъекция метками (`ansible_host`,
 `ansible_ssh_common_args`), белый список `ansible_user`/`ansible_port`,
 пагинация 150 ВМ, `verify_file`, регистр `ansible: false`, способы
-аутентификации и тексты ошибок. Всего 53 проверки; при регрессе скрипт падает
+аутентификации и тексты ошибок. Всего 55 проверок; при регрессе скрипт падает
 с ненулевым кодом.
 
 ```bash
