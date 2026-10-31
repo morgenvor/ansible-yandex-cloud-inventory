@@ -3,5 +3,6 @@ include LICENSE
 include pyproject.toml
 recursive-include inventory_plugins *.py
 recursive-include examples *.yml
+recursive-include docs *.md
 # Стенд кладём в sdist: по архиву с PyPI можно проверить плагин без облака.
-recursive-include tests *.py *.sh *.yml *.json 
+recursive-include tests *.py *.sh *.yml *.json
