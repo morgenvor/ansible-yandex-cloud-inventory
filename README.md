@@ -407,6 +407,9 @@ NIC, интерфейс с пустым адресом (как его отдаё
   создана, хост остался в inventory (обход каталога не воспроизводится);
 - имя хоста с дефисом: `--host inv-check-3` и `--limit inv-check-3` находят ВМ,
   `host_vars/inv-check-3.yml` рядом с inventory подхватывается;
+- метка `ansible_user` перебивает `-u`: с `-u root` ВМ отвечает «Please login as
+  the user "ubuntu" rather than the user "root"», а с меткой `ansible_user=ubuntu`
+  та же команда с `-u root` подключается пользователем `ubuntu`;
 - `ansible: false` убирает ВМ из inventory, снятие метки возвращает её;
 - `ansible_host` = публичный IP, `private_ipv4` = внутренний.
 
