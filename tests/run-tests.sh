@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 18 сценариев, 115 проверок.
+# Сейчас: 18 сценариев, 120 проверок.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -443,6 +443,22 @@ expect_in "Unauthenticated" "$OUT"
 expect_in "12 часов" "$OUT"
 expect_in "yc iam create-token" "$OUT"
 expect_not_in "Traceback (most recent call last)" "$OUT"
+
+echo
+echo "=== 14. Нет SDK yandexcloud: понятная ошибка вместо трейсбека ==="
+# Плагин ставят каталогом (так советует README), а зависимость — отдельным
+# шагом. Без неё раньше выходило «Unexpected Exception, this is probably a bug:
+# No module named 'yandexcloud'» с полным трейсбеком и кодом 250 — то есть
+# выглядело как баг Ansible, а не как забытая установка.
+# tests/fake_nosdk стоит в PYTHONPATH ПЕРЕД заглушкой SDK и падает при импорте.
+RC=0
+OUT="$(PYTHONPATH="$PWD/tests/fake_nosdk:$PYTHONPATH" "$AI" -i "$INV" --list 2>&1)" || RC=$?
+printf '%s\n' "$OUT" | head -3
+expect_in "не установлен SDK yandexcloud" "$OUT"
+expect_in "pip install yandexcloud" "$OUT"
+expect_not_in "Unexpected Exception" "$OUT"
+expect_not_in "Traceback (most recent call last)" "$OUT"
+if [ "$RC" -ne 0 ]; then ok "код возврата ненулевой ($RC)"; else bad "код возврата 0 при ошибке"; fi
 
 echo
 if [ "$FAIL" -ne 0 ]; then

@@ -5,9 +5,22 @@ from ansible.utils.display import Display
 import os
 import re
 import json
-from yandexcloud import SDK
-from yandex.cloud.compute.v1.instance_service_pb2 import ListInstancesRequest
-from yandex.cloud.compute.v1.instance_service_pb2_grpc import InstanceServiceStub
+
+# local patch: SDK — внешняя зависимость. Без неё плагин падал на импорте, и
+# Ansible печатал «Unexpected Exception, this is probably a bug: No module named
+# 'yandexcloud'» с полным трейсбеком и кодом 250. Кто ставит плагин каталогом
+# (а не `pip install .`), видит это первым, поэтому ошибка должна называть
+# причину и что сделать, а не выглядеть багом Ansible.
+try:
+    from yandexcloud import SDK
+    from yandex.cloud.compute.v1.instance_service_pb2 import ListInstancesRequest
+    from yandex.cloud.compute.v1.instance_service_pb2_grpc import InstanceServiceStub
+except ImportError as _import_error:
+    raise AnsibleError(
+        "yandex_cloud_inventory: не установлен SDK yandexcloud "
+        f"({_import_error}). Поставьте его в тот же интерпретатор, из которого "
+        "запускается Ansible: pip install yandexcloud"
+    )
 
 
 DOCUMENTATION = r'''
@@ -20,7 +33,7 @@ DOCUMENTATION = r'''
         - Fetches hosts from Yandex.Cloud Compute using a service account JSON key file or an existing IAM token.
         - The host name is the VM name exactly as it is in Yandex.Cloud, dashes included; Ansible accepts them in host names and warns only about group names.
         - Hosts are grouped by availability zone (dashes replaced with underscores, because Ansible warns about invalid characters in group names) and by the C(ansible_group) label, which creates C(yc_<value>) with dashes replaced with underscores; the I(group) option adds every host to one more group and is used as is.
-        - The C(yc_) prefix is mandatory and cannot be disabled. A label is writable by anyone who can edit the folder, and without the prefix it could put a VM into a group that has its own C(group_vars) (with secrets or C(ansible_connection)) or into a path like C(group_vars/../../outside). If the value already starts with C(yc_), the result is C(yc_yc_<value>) and a warning is shown. The rest of the name must match C(^[A-Za-z0-9][A-Za-z0-9_]*$) — an invalid value is reported with a warning and no group is created, while the host stays in the inventory. The raw value is still available as C(yc_label_ansible_group).
+        - The C(yc_) prefix is mandatory and cannot be disabled. A label is writable by anyone who can edit the folder, and without the prefix it could put a VM into a group that has its own C(group_vars) (with secrets or C(ansible_connection)) or into a path like C(group_vars/../../outside). If the value already starts with C(yc_), the result is C(yc_yc_<value>) and a warning is shown. The rest of the name must match C(^[A-Za-z0-9][A-Za-z0-9_]{0,62}$) — letters, digits and C(_), at most 63 characters — an invalid value is reported with a warning and no group is created, while the host stays in the inventory. The raw value is still available as C(yc_label_ansible_group).
         - Host variables are C(ansible_host) (public IPv4 address if the VM has one, otherwise the internal one), C(ipv4) (public IPv4 address or null), C(private_ipv4) (internal IPv4 address) and C(yc_name) (VM name in Yandex.Cloud).
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
