@@ -50,16 +50,49 @@ jobs:
         run: PYTHON="$(command -v python3)" ./bootstrap.sh
       # Проверка упаковки: файл, забытый в MANIFEST.in, не должен проходить
       # незамеченным. Сборка идёт в отдельный каталог, чтобы не подхватить
-      # устаревший SOURCES.txt из рабочего дерева.
-      - name: Собрать sdist из чистого дерева
+      # устаревший SOURCES.txt из рабочего дерева. Собираем оба артефакта —
+      # колесо тоже публикуется, и его состав раньше проверялся только руками.
+      - name: Собрать sdist и колесо из чистого дерева
         run: |
           python3 -m pip install --upgrade build
           git archive --format=tar HEAD | tar -x -C "$RUNNER_TEMP"
           cd "$RUNNER_TEMP"
-          python3 -m build --sdist --outdir "$RUNNER_TEMP/dist"
+          python3 -m build --outdir "$RUNNER_TEMP/dist"
+      # В колесо не должно попадать ничего, кроме самого плагина и dist-info:
+      # иначе в пакет утекут внутренние документы или тесты. Проверка на месте,
+      # потому что локальный сборщик видит не то же дерево, что CI.
+      - name: Проверить состав колеса
+        run: |
+          python3 - "$RUNNER_TEMP/dist" <<'PY'
+          import glob, sys, zipfile
+
+          wheels = glob.glob(sys.argv[1] + "/*.whl")
+          assert len(wheels) == 1, f"ожидалось одно колесо, найдено: {wheels}"
+          names = zipfile.ZipFile(wheels[0]).namelist()
+
+          allowed = [n for n in names
+                     if n.startswith("inventory_plugins/") or ".dist-info/" in n]
+          extra = sorted(set(names) - set(allowed))
+          assert not extra, f"в колесе лишние файлы: {extra}"
+
+          assert "inventory_plugins/yandex_cloud_inventory.py" in names, \
+              "в колесе нет самого плагина"
+          assert any(n.endswith("licenses/LICENSE") for n in names), \
+              "в dist-info нет LICENSE (правообладатели upstream и форк)"
+          print(f"состав колеса в порядке: {len(names)} файлов")
+          PY
       - name: Прогнать стенд из архива
         run: |
           mkdir -p "$RUNNER_TEMP/unpacked"
           tar xzf "$RUNNER_TEMP"/dist/*.tar.gz -C "$RUNNER_TEMP/unpacked"
-          cd "$RUNNER_TEMP"/unpacked/ansible_yandex_cloud_inventory*
+          # Глоб без версии: имя каталога в архиве — имя дистрибутива с `-` → `_`.
+          # Вместо `cd <глоб>` — явная проверка «ровно один каталог»: с двумя
+          # совпадениями `cd` падает невнятным «too many arguments».
+          set -- "$RUNNER_TEMP"/unpacked/ansible_yandex_cloud_inventory*
+          if [ "$#" -ne 1 ]; then
+            echo "ожидался ровно один распакованный каталог, найдено: $#" >&2
+            printf '  %s\n' "$@" >&2
+            exit 1
+          fi
+          cd "$1"
           ANSIBLE_INVENTORY_BIN="$GITHUB_WORKSPACE/.venv/bin/ansible-inventory" ./tests/run-tests.sh
