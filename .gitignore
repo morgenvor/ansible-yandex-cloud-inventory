@@ -13,6 +13,8 @@ venv/
 # Артефакты стенда: кэш uv и ANSIBLE_HOME из tests/run-tests.sh.
 .uv-cache/
 .ansible-home/
+# Приёмочный тест установки из PyPI (venv с опубликованной версией), см. CHANGELOG.
+.pypi-check/
 # Реальные inventory-файлы с folder_id/токенами держим вне git.
 # Плагин забирает ровно два вида имён — `yc_inventory.yml` и
 # `<префикс>_yc_inventory.yml` (см. verify_file), поэтому закрываем обе формы:
