@@ -148,7 +148,7 @@ ansible-core (`play_context.set_task_and_variable_override()`: сначала
 ## 8. Как это проверено
 
 Отдельного облака для проверки не нужно: `tests/fake_yc/` подменяет SDK, а
-`tests/run-tests.sh` прогоняет настоящий `ansible-inventory` по пятнадцати
+`tests/run-tests.sh` прогоняет настоящий `ansible-inventory` по шестнадцати
 сценариям (инъекция метками, белый список, интерфейс без IPv4 и с пустым
 адресом, дефисы в именах ВМ, дубль имени в ответе API, пагинация, `verify_file`,
 регистр `ansible: false`, аутентификация, рендеринг `DOCUMENTATION` через
@@ -157,7 +157,7 @@ ansible-core (`play_context.set_task_and_variable_override()`: сначала
 
 ```bash
 ./bootstrap.sh        # соберёт локальный .venv
-./tests/run-tests.sh  # 15 сценариев, 87 проверок
+./tests/run-tests.sh  # 16 сценариев, 97 проверок
 ```
 
 Дополнительно поведение проверено на живом каталоге Yandex Cloud: инъекция
