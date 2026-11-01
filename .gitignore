@@ -20,11 +20,16 @@ venv/
 # IAM-токеном ушёл бы в git мимо этих правил.
 # Исключения ниже обязательны: тестовые фикстуры и пример — это не секреты,
 # и без них стенд tests/run-tests.sh не запустится у клонировавшего форк.
+# Голая форма закрыта для ОБОИХ расширений: verify_file принимает `yc_inventory.yml`
+# и `yc_inventory.yaml`, и файл с `.yaml` иначе уходил бы в git (маска
+# `*_yc_inventory.yaml` покрывает только имя с префиксом).
 yc_inventory.yml
+yc_inventory.yaml
 *_yc_inventory.yml
 *_yc_inventory.yaml
 inventory.yml
 !tests/yc_inventory.yml
+!tests/yc_inventory.yaml
 !tests/_yc_inventory.yml
 !tests/*_yc_inventory.yml
 !tests/*_yc_inventory.yaml
