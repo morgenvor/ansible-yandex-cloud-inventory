@@ -61,5 +61,5 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/unpacked"
           tar xzf "$RUNNER_TEMP"/dist/*.tar.gz -C "$RUNNER_TEMP/unpacked"
-          cd "$RUNNER_TEMP"/unpacked/ansible_yandex_cloud_inventory-*
+          cd "$RUNNER_TEMP"/unpacked/ansible_yandex_cloud_inventory*
           ANSIBLE_INVENTORY_BIN="$GITHUB_WORKSPACE/.venv/bin/ansible-inventory" ./tests/run-tests.sh
