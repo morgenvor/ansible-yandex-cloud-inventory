@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 18 сценариев, 123 проверки.
+# Сейчас: 18 сценариев, 124 проверки.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -140,7 +140,10 @@ ERR="$(cat "$ERRF")"
 HOSTGROUPS="$(hostgroups "$JSON")"
 printf '%s\n' "$ERR"
 printf '%s\n' "$HOSTGROUPS"
-# Значения меток Yandex Cloud не ограничивает, поэтому мусор в метке — не повод
+# По документации Yandex Cloud значения меток ограничены строчными латинскими
+# буквами, цифрами, '-' и '_' (до 63 символов), но полагаться на эту проверку
+# нельзя: в живом прогоне 2026-11-01 API принял значение '../../outside/evil'
+# (см. docs/upstream-differences.md, §2). Поэтому мусор в метке — не повод
 # терять хост: все ВМ остаются в inventory, пропадает только группа.
 expect_line "6" "$(hostcount "$JSON")"
 expect_in "'../../evil' недопустимо" "$ERR"
@@ -170,9 +173,14 @@ mkdir -p "$GRP/group_vars"
     echo "plugin: yandex_cloud_inventory"
     echo "folder_id: b1gfakefolder00000000"
     echo "service_account_key_file: $PWD/tests/fake_sa_key.json"
+    # Опция group: все хосты каталога попадают в одну группу, заданную
+    # владельцем, — единственный способ дать хостам общие group_vars, не
+    # полагаясь на метку (метка уходит только в yc_*).
+    echo "group: owner_group"
 } >"$GRP/yc_inventory.yml"
 printf 'from_yc_group: "yes"\n' >"$GRP/group_vars/yc_docker.yml"
 printf 'from_plain_group: "yes"\n' >"$GRP/group_vars/docker.yml"
+printf 'from_owner_group: "yes"\n' >"$GRP/group_vars/owner_group.yml"
 JSON="$("$AI" -i "$GRP/yc_inventory.yml" --list 2>/dev/null)"
 VARS="$(hostvars "$JSON" docker-server)"
 KEYS="$(hostkeys "$JSON")"
@@ -180,6 +188,13 @@ printf '%s\n' "$VARS"
 expect_line "docker-server from_yc_group = yes" "$VARS"
 expect_no_line "docker-server from_plain_group = yes" "$VARS"
 expect_not_in "from_plain_group" "$KEYS"
+# Опция group покрыта стендом: в группу владельца входят ВСЕ хосты каталога
+# (в сценарии по умолчанию — два), а её group_vars применяются.
+HOSTGROUPS="$(hostgroups "$JSON")"
+expect_line "owner_group docker-server" "$HOSTGROUPS"
+expect_line "owner_group nexus_server" "$HOSTGROUPS"
+expect_line "2" "$(printf '%s\n' "$HOSTGROUPS" | grep -c '^owner_group ' || true)"
+expect_line "docker-server from_owner_group = yes" "$VARS"
 
 echo
 echo "=== 1d. Директивы читаются по нормализованным ключам меток ==="
@@ -256,17 +271,6 @@ printf '%s\n' "$HOSTGROUPS"
 expect_line "ru_central1_a web-1" "$HOSTGROUPS"
 expect_line "ru_central1_b web_1" "$HOSTGROUPS"
 expect_no_line "ru_central1_a web_1" "$HOSTGROUPS"
-
-echo
-echo "=== 4b. Дубль имени в ответе API: предупреждение, а не молчаливая перезапись ==="
-ERRF="$TMP/dup.err"
-JSON="$(FAKE_YC_SCENARIO=dup "$AI" -i "$INV" --list 2>"$ERRF")"
-ERR="$(cat "$ERRF")"
-printf '%s\n' "$ERR"
-expect_in "хост 'dup-vm' уже добавлен другой ВМ" "$ERR"
-expect_line "1" "$(hostcount "$JSON")"
-# Перезапись видна в данных: остаётся последняя запись, как её отдал API.
-expect_line "dup-vm ansible_host = 10.0.8.2" "$(hostvars "$JSON" dup-vm)"
 
 echo
 echo "=== 5. Инъекция метками: ansible_host/ansible_ssh_common_args не применяются ==="

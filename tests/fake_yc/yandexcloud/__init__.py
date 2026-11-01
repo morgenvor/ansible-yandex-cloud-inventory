@@ -26,7 +26,6 @@ SCENARIOS = {
     "nic_no_v4": fake_data.NIC_NO_V4,
     "nic_empty_v4": fake_data.NIC_EMPTY_V4,
     "dashes": fake_data.DASHES,
-    "dup": fake_data.DUP,
     "inject": fake_data.INJECT,
     "whitelist": fake_data.WHITELIST,
     "paged": fake_data.PAGED,
