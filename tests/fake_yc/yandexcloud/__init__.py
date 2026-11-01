@@ -39,6 +39,13 @@ SCENARIOS = {
 class _FakeInstanceClient:
     def List(self, request):
         name = os.environ.get("FAKE_YC_SCENARIO", "default")
+        # Отказ API (истёкший токен, нет прав): стаб должен уметь отказывать,
+        # иначе нечем проверить, что плагин печатает понятное сообщение, а не
+        # сырое исключение SDK.
+        if name == "api_error":
+            raise RuntimeError(
+                "rpc error: code = Unauthenticated desc = Request is not authorized"
+            )
         if name not in SCENARIOS:
             raise RuntimeError(
                 f"FAKE_YC_SCENARIO={name!r} неизвестен; есть: {', '.join(sorted(SCENARIOS))}"

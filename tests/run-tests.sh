@@ -432,6 +432,19 @@ expect_in "Живые проверки пройдены" "$OUT"
 expect_not_in "FAIL:" "$OUT"
 
 echo
+echo "=== 13. Отказ API: понятное сообщение вместо сырого исключения SDK ==="
+# Ansible на ошибке разбора источника печатает предупреждение и продолжает с
+# пустым inventory, поэтому текст ошибки — единственное, по чему владелец
+# поймёт, что случилось (чаще всего истёк IAM-токен или не хватает прав).
+OUT="$(FAKE_YC_SCENARIO=api_error "$AI" -i "$INV" --list 2>&1)"
+printf '%s\n' "$OUT" | head -2
+expect_in "не удалось получить список ВМ каталога" "$OUT"
+expect_in "Unauthenticated" "$OUT"
+expect_in "12 часов" "$OUT"
+expect_in "yc iam create-token" "$OUT"
+expect_not_in "Traceback (most recent call last)" "$OUT"
+
+echo
 if [ "$FAIL" -ne 0 ]; then
     echo "ПРОВАЛЕНО проверок: $FAIL (успешных: $PASS)" >&2
     exit 1

@@ -128,7 +128,7 @@ class InventoryModule(BaseInventoryPlugin):
 
         # Проверяем наличие файла сервисного аккаунта
         if sa_key_file and not os.path.isfile(sa_key_file):
-            raise AnsibleError(f"Service account key file not found: {sa_key_file}")
+            raise AnsibleParserError(f"Service account key file not found: {sa_key_file}")
 
         # Если нет IAM токена в конфигурации, берем из переменной окружения
         if not iam_token:
@@ -145,11 +145,10 @@ class InventoryModule(BaseInventoryPlugin):
                 with open(sa_key_file, 'r') as infile:
                     sa_key = json.load(infile)
                 sdk = SDK(service_account_key=sa_key)
-            elif iam_token:
-                # Приоритет 2: IAM токен
-                sdk = SDK(iam_token=iam_token)
             else:
-                raise AnsibleError("No authentication method provided")
+                # Приоритет 2: IAM токен. Пустой токен сюда не доходит: выше
+                # есть проверка, что способ аутентификации вообще задан.
+                sdk = SDK(iam_token=iam_token)
 
             instance_client = sdk.client(InstanceServiceStub)
         except Exception as e:
@@ -160,13 +159,30 @@ class InventoryModule(BaseInventoryPlugin):
         instances = []
         page_token = None
         while True:
-            response = instance_client.List(
-                ListInstancesRequest(folder_id=folder_id, page_size=1000, page_token=page_token)
-            )
+            # local patch: отказ API показываем как ошибку плагина с подсказкой.
+            # Раньше наружу летело исключение SDK, и Ansible печатал его текст
+            # как есть: при истёкшем IAM-токене (живёт 12 часов) это
+            # «Unauthenticated» без намёка на причину. Ansible после ошибки
+            # разбора источника продолжает работу с пустым inventory, поэтому
+            # внятное сообщение — единственный сигнал владельцу.
+            try:
+                response = instance_client.List(
+                    ListInstancesRequest(folder_id=folder_id, page_size=1000, page_token=page_token)
+                )
+            except Exception as e:
+                raise AnsibleError(
+                    "yandex_cloud_inventory: не удалось получить список ВМ каталога "
+                    f"'{folder_id}' — {e}. Проверьте права учётной записи (для чтения "
+                    "достаточно роли viewer) и срок жизни IAM-токена (12 часов, "
+                    "обновить: yc iam create-token)"
+                )
             instances.extend(response.instances)
-            page_token = getattr(response, 'next_page_token', None)
-            if not page_token:
+            next_token = getattr(response, 'next_page_token', None)
+            # local patch: если API вернёт тот же токен, цикл был бы вечным —
+            # inventory висел бы вместо ошибки.
+            if not next_token or next_token == page_token:
                 break
+            page_token = next_token
 
         # Создаем основную группу, если указана
         if group:
