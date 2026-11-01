@@ -307,6 +307,17 @@ expect_line "wl-vm ansible_port = 2222" "$VARS"
 expect_no_line "wl-vm ansible_bad_arg" "$KEYS"
 expect_line "wl-vm yc_label_ansible_bad_arg = x" "$VARS"
 expect_in "метка 'ansible_bad_arg' не применяется как служебная переменная" "$ERR"
+# Недопустимые значения белого списка не применяются: порт «not-a-port» доехал
+# бы до ssh как `Port=not-a-port`, а логин с пробелом ломает разбор
+# `-o User="..."`. Сырые значения при этом не теряются.
+VARS="$(hostvars "$JSON" wl-bad-vm)"
+printf '%s\n' "$VARS"
+expect_no_line "wl-bad-vm ansible_user = bad user" "$KEYS"
+expect_no_line "wl-bad-vm ansible_port = not-a-port" "$KEYS"
+expect_line "wl-bad-vm yc_label_ansible_user = bad user" "$VARS"
+expect_line "wl-bad-vm yc_label_ansible_port = not-a-port" "$VARS"
+expect_in "метка 'ansible_port' со значением 'not-a-port' не применена" "$ERR"
+expect_in "метка 'ansible_user' со значением 'bad user' не применена" "$ERR"
 
 echo
 echo "=== 7. Пагинация: 150 ВМ в двух страницах ==="

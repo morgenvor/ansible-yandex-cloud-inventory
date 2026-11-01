@@ -21,6 +21,7 @@ DOCUMENTATION = r'''
         - Host variables are C(ansible_host) (public IPv4 address if the VM has one, otherwise the internal one), C(ipv4) (public IPv4 address or null), C(private_ipv4) (internal IPv4 address) and C(yc_name) (VM name in Yandex.Cloud).
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
+        - The values of the two allowed labels are validated — C(ansible_port) must be a number from 1 to 65535, C(ansible_user) must not be empty and must not contain spaces, quotes or backslashes (they are passed to C(ssh) as C(-o Port=...) and C(-o User="...")). An unusable value is reported with a warning, is not applied as a service variable, and stays available as C(yc_label_<key>).
         - Because C(ansible_user) is a host variable, it takes precedence over C(remote_user) in a play and over C(-u) on the command line, so set this label deliberately.
         - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the C(yc_<value>) group described above. Both are read after key normalization, so a label spelled C(ansible-group) works exactly like C(ansible_group).
     options:
@@ -68,6 +69,31 @@ ALLOWED_ANSIBLE_LABELS = frozenset({'ansible_user', 'ansible_port'})
 #      после префикса разрешены только буквы, цифры и `_`.
 LABEL_GROUP_PREFIX = 'yc_'
 LABEL_GROUP_RE = re.compile(r'^yc_[A-Za-z0-9][A-Za-z0-9_]{0,62}$')
+
+
+def _invalid_whitelist_reason(key, value):
+    """Почему значение метки из белого списка нельзя применять.
+
+    Пустая строка — значение пригодно. Проверяем именно значение: ключ попал в
+    белый список потому, что не выполняет код на контроллере, но значение
+    уходит в командную строку ssh (`-o Port=...`, `-o User="..."`), и мусор в
+    нём даёт отказ подключения с непонятной причиной вместо понятного
+    предупреждения от плагина.
+    """
+    text = str(value)
+    if key == 'ansible_port':
+        try:
+            port = int(text.strip())
+        except (TypeError, ValueError):
+            return f"ожидается номер порта, получено {text!r}"
+        if not 1 <= port <= 65535:
+            return f"порт вне диапазона 1-65535: {text!r}"
+        return ''
+    if not text.strip():
+        return "логин пустой"
+    if any(ch.isspace() or ch in '"\'\\' for ch in text):
+        return f"логин содержит пробел, кавычку или обратную косую черту: {text!r}"
+    return ''
 
 
 class InventoryModule(BaseInventoryPlugin):
@@ -252,14 +278,34 @@ class InventoryModule(BaseInventoryPlugin):
             # применяются. Под безопасным префиксом данные сохраняются целиком.
             for key, value in labels.items():
                 self.inventory.set_variable(host_name, f'yc_label_{key}', value)
-                if key in ALLOWED_ANSIBLE_LABELS:
-                    self.inventory.set_variable(host_name, key, value)
-                elif key.startswith('ansible_') and key != 'ansible_group':
+                if key not in ALLOWED_ANSIBLE_LABELS:
+                    if key.startswith('ansible_') and key != 'ansible_group':
+                        display.warning(
+                            f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
+                            f"'{key}' не применяется как служебная переменная "
+                            f"(осталась как yc_label_{key})"
+                        )
+                    continue
+                # local patch: белый список — это две переменные, которые не
+                # выполняют код на контроллере, но значение у них тоже
+                # недоверенное. Порт из метки «not-a-port» доезжал до ssh как
+                # `Port=not-a-port` и давал непонятный отказ подключения, а логин
+                # с пробелом или кавычкой ломал разбор `-o User="..."` в
+                # ansible-core. Такое значение отбрасываем с предупреждением,
+                # сырая метка остаётся в yc_label_*.
+                reason = _invalid_whitelist_reason(key, value)
+                if reason:
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
-                        f"'{key}' не применяется как служебная переменная "
+                        f"'{key}' со значением '{value}' не применена как "
+                        f"служебная переменная: {reason} "
                         f"(осталась как yc_label_{key})"
                     )
+                    continue
+                if key == 'ansible_port':
+                    self.inventory.set_variable(host_name, key, int(str(value).strip()))
+                else:
+                    self.inventory.set_variable(host_name, key, value)
 
             # Добавляем в группы
             self.inventory.add_group(zone)
