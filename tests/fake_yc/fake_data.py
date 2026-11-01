@@ -10,8 +10,13 @@ from types import SimpleNamespace as NS
 
 
 def _iface(internal, external=None):
-    nat = NS(address=external) if external else None
-    return NS(primary_v4_address=NS(address=internal, one_to_one_nat=nat))
+    # Реальный protobuf НЕ возвращает None для незаполненных сообщений: он
+    # отдаёт пустое сообщение с address == "". Проверено на yandexcloud 0.412.0
+    # (NetworkInterface().primary_v4_address.address == ''), поэтому заглушка
+    # повторяет именно это: иначе стенд проверяет сценарий, которого в облаке
+    # не бывает, и пропускает тот, который бывает.
+    nat = NS(address=external or "")
+    return NS(primary_v4_address=NS(address=internal or "", one_to_one_nat=nat))
 
 
 def _vm(name, zone, labels, internal, external=None, interfaces=None):
@@ -56,8 +61,29 @@ NO_NIC = [
     ),
 ]
 
-# Сценарий NIC без адреса: интерфейс есть, primary_v4_address = None.
-# Плагин раньше падал на этом с AttributeError и отдавал пустой inventory.
+# Сценарий NIC без адреса в том виде, в каком его отдаёт реальный API:
+# primary_v4_address — пустое сообщение, address == "". Плагин раньше падал
+# на этом с AttributeError и отдавал пустой inventory, а после первой правки
+# добавлял хост с ansible_host == "" (guard проверял `is None`).
+NIC_EMPTY_V4 = [
+    _vm(
+        "nov4-vm",
+        "ru-central1-a",
+        {},
+        internal=None,
+        interfaces=[NS(primary_v4_address=NS(address="", one_to_one_nat=NS(address="")))],
+    ),
+    _vm(
+        "healthy-vm",
+        "ru-central1-a",
+        {"ansible_group": "docker"},
+        internal="10.0.4.9",
+        external="178.154.248.99",
+    ),
+]
+
+# Защитный вариант: primary_v4_address = None. Реальный protobuf так не делает,
+# но так ведут себя заглушки и старые SDK — плагин обязан пережить и это.
 NIC_NO_V4 = [
     _vm("nov4-vm", "ru-central1-a", {}, internal=None, interfaces=[NS(primary_v4_address=None)]),
     _vm(

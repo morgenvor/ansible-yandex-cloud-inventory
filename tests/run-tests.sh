@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 10 сценариев, 55 проверок.
+# Сейчас: 11 сценариев, 60 проверок.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -117,6 +117,10 @@ expect_line "docker_server ansible_host = 178.154.248.236" "$VARS"
 expect_line "docker_server private_ipv4 = 10.0.0.5" "$VARS"
 # ВМ без публичного IP живёт на внутреннем.
 expect_line "nexus_server ansible_host = 10.0.0.6" "$(hostvars "$JSON" nexus_server)"
+# Публичного адреса нет → ipv4 = None, а не пустая строка: реальный API отдаёт
+# "" (protobuf-дефолт), плагин нормализует его в null, как обещано в README.
+expect_line "nexus_server ipv4 = None" "$(hostvars "$JSON" nexus_server)"
+expect_no_line "nexus_server ipv4 = " "$(hostvars "$JSON" nexus_server)"
 # Фикс №6: имя хоста не в зарезервированной переменной name.
 expect_line "docker_server yc_name = docker-server" "$VARS"
 # Фикс №7: ВМ с меткой ansible=false в inventory не попадает.
@@ -144,6 +148,17 @@ JSON="$(FAKE_YC_SCENARIO=nic_no_v4 "$AI" -i "$INV" --list 2>"$ERRF")"
 ERR="$(cat "$ERRF")"
 printf '%s\n' "$ERR"
 expect_in "на первом интерфейсе нет IPv4-адреса" "$ERR"
+expect_not_in "nov4_vm" "$(hostkeys "$JSON")"
+expect_line "healthy_vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy_vm)"
+
+echo
+echo "=== 3b. NIC без адреса в том виде, как его отдаёт реальный API (address='') ==="
+ERRF="$TMP/nic_empty_v4.err"
+JSON="$(FAKE_YC_SCENARIO=nic_empty_v4 "$AI" -i "$INV" --list 2>"$ERRF")"
+ERR="$(cat "$ERRF")"
+printf '%s\n' "$ERR"
+expect_in "на первом интерфейсе нет IPv4-адреса" "$ERR"
+# Главное: хост НЕ должен попасть в inventory с пустым ansible_host.
 expect_not_in "nov4_vm" "$(hostkeys "$JSON")"
 expect_line "healthy_vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy_vm)"
 

@@ -227,7 +227,7 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 | Переменная | Значение |
 |---|---|
 | `ansible_host` | публичный IP, если он есть, иначе внутренний |
-| `ipv4` | публичный IP (может быть пустым) |
+| `ipv4` | публичный IP или `null`, если публичного адреса нет |
 | `private_ipv4` | внутренний IP |
 | `yc_name` | имя инстанса в Yandex Cloud |
 | `yc_label_<ключ>` | метка ВМ (например, `role: web-app` → `yc_label_role`) |
@@ -267,6 +267,10 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
   пользователя контроллера, а не от пользователя образа. Для ВМ, созданных
   через CLI, это обычно `yc-user`, для образов Ubuntu — `ubuntu`: имя нужно
   задавать явно меткой `ansible_user` (она в белом списке).
+- Плагин не смотрит на состояние ВМ: остановленная (`STOPPED`) или вытесненная
+  preemptible-машина остаётся в inventory, пока существует как ресурс. Если
+  публичный адрес не статический, после `stop`/`start` он меняется — это
+  поведение Yandex Cloud, а не плагина.
 
 ## Требования
 
@@ -284,7 +288,7 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 NIC без IPv4, коллизия имён хостов, инъекция метками (`ansible_host`,
 `ansible_ssh_common_args`), белый список `ansible_user`/`ansible_port`,
 пагинация 150 ВМ, `verify_file`, регистр `ansible: false`, способы
-аутентификации и тексты ошибок. Всего 55 проверок; при регрессе скрипт падает
+аутентификации и тексты ошибок. Всего 60 проверок; при регрессе скрипт падает
 с ненулевым кодом.
 
 ```bash

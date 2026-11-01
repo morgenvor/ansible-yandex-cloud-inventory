@@ -147,17 +147,24 @@ class InventoryModule(BaseInventoryPlugin):
 
             primary_v4 = instance.network_interfaces[0].primary_v4_address
 
-            # local patch: интерфейс без IPv4-адреса (primary_v4_address = None)
-            # ронял плагин на `primary_v4.one_to_one_nat` с AttributeError.
-            if primary_v4 is None:
+            # local patch: интерфейс без IPv4-адреса ронял плагин на
+            # `primary_v4.one_to_one_nat` с AttributeError (upstream), а первая
+            # версия фикса добавляла хост с ansible_host == "" — потому что
+            # проверяла `is None`. Реальный protobuf для незаполненного поля
+            # возвращает не None, а пустое сообщение с address == ""
+            # (проверено на yandexcloud 0.412.0), поэтому проверяем значение:
+            # это покрывает и None (заглушки, старые SDK), и пустую строку.
+            internal_ip = getattr(primary_v4, 'address', None) or None
+            if internal_ip is None:
                 display.warning(
                     f"yandex_cloud_inventory: у ВМ '{instance.name}' на первом "
                     f"интерфейсе нет IPv4-адреса, пропускаю"
                 )
                 continue
 
-            internal_ip = getattr(primary_v4, 'address', None)
-            external_ip = getattr(primary_v4.one_to_one_nat, 'address', None) if primary_v4.one_to_one_nat else None
+            # Пустой address у NAT означает «публичного адреса нет»: нормализуем
+            # в None, чтобы ipv4 был null, а не "", как обещает документация.
+            external_ip = getattr(primary_v4.one_to_one_nat, 'address', None) or None
 
             # Директивы читаем из сырых меток: это настройки плагина, а не
             # переменные хоста, поэтому нормализация ключей их не касается.
@@ -200,16 +207,9 @@ class InventoryModule(BaseInventoryPlugin):
             # local patch: в upstream предпочитался внутренний IP, из-за чего
             # запуск с машины вне облака не подключался к ВМ. Публичный адрес —
             # рабочий по умолчанию, внутренний остаётся в private_ipv4.
+            # Пустых значений здесь уже нет: отсутствие внутреннего адреса
+            # отсеяно выше, значит ansible_ip всегда непустой.
             ansible_ip = external_ip if external_ip else internal_ip
-
-            # local patch: хост без единого IPv4 попадал в inventory с
-            # `ansible_host: null` и ломал подключение молча.
-            if ansible_ip is None:
-                display.warning(
-                    f"yandex_cloud_inventory: у ВМ '{instance.name}' нет ни "
-                    f"публичного, ни внутреннего IPv4, пропускаю"
-                )
-                continue
 
             # Добавляем хост. local patch: если имя уже занято другой ВМ, прежний
             # хост снимаем целиком (remove_host убирает его из всех групп), иначе

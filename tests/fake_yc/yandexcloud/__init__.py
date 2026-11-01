@@ -24,6 +24,7 @@ SCENARIOS = {
     "default": fake_data.DEFAULT,
     "no_nic": fake_data.NO_NIC,
     "nic_no_v4": fake_data.NIC_NO_V4,
+    "nic_empty_v4": fake_data.NIC_EMPTY_V4,
     "collide": fake_data.COLLIDE,
     "inject": fake_data.INJECT,
     "whitelist": fake_data.WHITELIST,
