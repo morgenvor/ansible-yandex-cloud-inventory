@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ansible-yandex-cloud-inventory-fixed"
-version = "3.0.3"
+version = "3.0.4"
 description = "Ansible dynamic inventory plugin for Yandex Cloud"
 readme = "README.md"
 license = "MIT"
