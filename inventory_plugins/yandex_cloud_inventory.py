@@ -22,7 +22,7 @@ DOCUMENTATION = r'''
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
         - Because C(ansible_user) is a host variable, it takes precedence over C(remote_user) in a play and over C(-u) on the command line, so set this label deliberately.
-        - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the C(yc_<value>) group described above.
+        - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the C(yc_<value>) group described above. Both are read after key normalization, so a label spelled C(ansible-group) works exactly like C(ansible_group).
     options:
         plugin:
             description: Name of this plugin
@@ -177,29 +177,10 @@ class InventoryModule(BaseInventoryPlugin):
             # в None, чтобы ipv4 был null, а не "", как обещает документация.
             external_ip = getattr(primary_v4.one_to_one_nat, 'address', None) or None
 
-            # Директивы читаем из сырых меток: это настройки плагина, а не
-            # переменные хоста, поэтому нормализация ключей их не касается.
-            raw_labels = instance.labels
-
-            # Фильтрация: если label ansible == false (local patch: без учёта регистра)
-            if str(raw_labels.get('ansible', '')).lower() == 'false':
-                continue
-
-            # local patch: имя хоста — это имя ВМ как есть, дефисы сохраняются.
-            # Ansible дефис в имени хоста принимает (предупреждает он только про
-            # имена групп), а имена ВМ в каталоге уникальны. Раньше здесь стояла
-            # замена `-` на `_`: `web-1` и `web_1` давали один хост, одна из ВМ
-            # молча пропадала, а `ansible web-1` не находил хост.
-            host_name = instance.name
-            # Зону нормализуем намеренно: Ansible предупреждает о недопустимых
-            # символах в имени группы, а `force_valid_group_names` по умолчанию
-            # `never` — значит, без замены поведение зависело бы от чужого
-            # ansible.cfg и каждый запуск сыпал бы предупреждением.
-            zone = instance.zone_id.replace("-", "_")
-
             # local patch: в upstream значения меток тоже портились (web-app -> web_app),
             # что незаметно меняло данные. Чистим только ключи: они становятся именами
             # переменных, а значения переменных можно оставить как есть.
+            raw_labels = instance.labels
             labels = {}
             label_sources = {}
             for key, value in raw_labels.items():
@@ -215,6 +196,30 @@ class InventoryModule(BaseInventoryPlugin):
                     )
                 labels[normalized] = value
                 label_sources[normalized] = key
+
+            # local patch: директивы читаем из нормализованных ключей, как и всё
+            # остальное. Раньше они брались из сырых, и метка `ansible-group: docker`
+            # давала переменную `yc_label_ansible_group`, но группы `yc_docker` не
+            # создавала и предупреждения не печатала — то есть вела себя иначе,
+            # чем её же нормализованное имя. Нормализация ключа и чтение директивы
+            # должны совпадать, иначе одно и то же имя метки работает по-разному
+            # в зависимости от того, как его записали.
+
+            # Фильтрация: если label ansible == false (local patch: без учёта регистра)
+            if str(labels.get('ansible', '')).lower() == 'false':
+                continue
+
+            # local patch: имя хоста — это имя ВМ как есть, дефисы сохраняются.
+            # Ansible дефис в имени хоста принимает (предупреждает он только про
+            # имена групп), а имена ВМ в каталоге уникальны. Раньше здесь стояла
+            # замена `-` на `_`: `web-1` и `web_1` давали один хост, одна из ВМ
+            # молча пропадала, а `ansible web-1` не находил хост.
+            host_name = instance.name
+            # Зону нормализуем намеренно: Ansible предупреждает о недопустимых
+            # символах в имени группы, а `force_valid_group_names` по умолчанию
+            # `never` — значит, без замены поведение зависело бы от чужого
+            # ansible.cfg и каждый запуск сыпал бы предупреждением.
+            zone = instance.zone_id.replace("-", "_")
 
             # local patch: в upstream предпочитался внутренний IP, из-за чего
             # запуск с машины вне облака не подключался к ВМ. Публичный адрес —
@@ -264,8 +269,9 @@ class InventoryModule(BaseInventoryPlugin):
             # Метка недоверенная, поэтому в группы владельца репозитория
             # (dbservers, prod, ...) она попасть не может, а имя группы не
             # выходит за пределы пространства yc_, пригодного для пути
-            # group_vars/<имя> (см. LABEL_GROUP_RE).
-            raw_group = str(raw_labels.get('ansible_group') or '').strip()
+            # group_vars/<имя> (см. LABEL_GROUP_RE). Ключ берём из
+            # нормализованных меток: `ansible-group` и `ansible_group` — одна метка.
+            raw_group = str(labels.get('ansible_group') or '').strip()
             if raw_group:
                 suffix = raw_group.replace('-', '_')
                 if suffix.startswith(LABEL_GROUP_PREFIX):

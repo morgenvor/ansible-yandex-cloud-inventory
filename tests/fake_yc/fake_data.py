@@ -175,7 +175,19 @@ BAD_GROUP = [
     _vm("prefixed-vm", "ru-central1-a", {"ansible_group": "yc_docker"}, internal="10.0.9.6"),
 ]
 
-# Сценарий фильтра по метке ansible: проверяем, что сравнение не зависит
+# Сценарий директив, записанных через дефис. `ansible-group` и `ansible_group`
+# дают одну и ту же переменную `yc_label_ansible_group`, поэтому директивой они
+# должны считаться одинаково: раньше директивы читались из сырых ключей, и
+# `ansible-group: docker` молча не создавал группу `yc_docker`.
+# Фильтр `ansible: false` живёт в том же сценарии: после перехода на
+# нормализованные ключи он обязан работать как раньше.
+DASH_DIRECTIVE = [
+    _vm("dash-group-vm", "ru-central1-a", {"ansible-group": "docker"}, internal="10.0.10.1"),
+    _vm("dash-off-vm", "ru-central1-a", {"ansible": "false"}, internal="10.0.10.2"),
+    _vm("plain-vm", "ru-central1-a", {"env": "prod"}, internal="10.0.10.3"),
+]
+
+# Сценарий для проверки фильтра по метке ansible: проверяем, что сравнение не зависит
 # от регистра значения (фикс №7). Контрольная ВМ с ansible=true должна остаться.
 CASE_LABELS = [
     _vm("stay-vm", "ru-central1-a", {"ansible": "true"}, internal="10.0.3.1"),

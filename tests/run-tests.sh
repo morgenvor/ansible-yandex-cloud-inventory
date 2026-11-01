@@ -182,6 +182,25 @@ expect_no_line "docker-server from_plain_group = yes" "$VARS"
 expect_not_in "from_plain_group" "$KEYS"
 
 echo
+echo "=== 1d. Директивы читаются по нормализованным ключам меток ==="
+# `ansible-group` и `ansible_group` — одна переменная (yc_label_ansible_group),
+# значит и директивой они должны считаться одинаково. Раньше директивы брались
+# из сырых ключей: метка `ansible-group: docker` переменную создавала, а группу
+# `yc_docker` — нет, и молчала об этом.
+ERRF="$TMP/dash_directive.err"
+JSON="$(FAKE_YC_SCENARIO=dash_directive "$AI" -i "$INV" --list 2>"$ERRF")"
+ERR="$(cat "$ERRF")"
+HOSTGROUPS="$(hostgroups "$JSON")"
+printf '%s\n' "$HOSTGROUPS"
+expect_line "yc_docker dash-group-vm" "$HOSTGROUPS"
+expect_line "dash-group-vm yc_label_ansible_group = docker" "$(hostvars "$JSON" dash-group-vm)"
+# Фильтр ansible=false работает и после перехода на нормализованные ключи,
+# остальные ВМ на месте (3 записи в ответе → 2 хоста).
+expect_line "2" "$(hostcount "$JSON")"
+expect_not_in "dash-off-vm" "$(hostkeys "$JSON")"
+expect_line "plain-vm ansible_host = 10.0.10.3" "$(hostvars "$JSON" plain-vm)"
+
+echo
 echo "=== 2. ВМ без сетевых интерфейсов: предупреждение, остальные на месте ==="
 ERRF="$TMP/no_nic.err"
 JSON="$(FAKE_YC_SCENARIO=no_nic "$AI" -i "$INV" --list 2>"$ERRF")"

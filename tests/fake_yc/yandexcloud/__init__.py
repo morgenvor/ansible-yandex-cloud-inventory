@@ -32,6 +32,7 @@ SCENARIOS = {
     "paged": fake_data.PAGED,
     "case_labels": fake_data.CASE_LABELS,
     "bad_group": fake_data.BAD_GROUP,
+    "dash_directive": fake_data.DASH_DIRECTIVE,
 }
 
 
