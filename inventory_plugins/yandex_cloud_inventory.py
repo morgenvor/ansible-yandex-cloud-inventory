@@ -13,6 +13,9 @@ from yandex.cloud.compute.v1.instance_service_pb2_grpc import InstanceServiceStu
 DOCUMENTATION = r'''
     name: yandex_cloud_inventory
     short_description: Yandex.Cloud dynamic inventory using service account key or IAM token
+    author:
+        - Maksim Zatolokin (upstream)
+        - morgenvor (fork)
     description:
         - Fetches hosts from Yandex.Cloud Compute using a service account JSON key file or an existing IAM token.
         - The host name is the VM name exactly as it is in Yandex.Cloud, dashes included; Ansible accepts them in host names and warns only about group names.
@@ -333,9 +336,9 @@ class InventoryModule(BaseInventoryPlugin):
             # выходит за пределы пространства yc_, пригодного для пути
             # group_vars/<имя> (см. LABEL_GROUP_RE). Ключ берём из
             # нормализованных меток: `ansible-group` и `ansible_group` — одна метка.
-            raw_group = str(labels.get('ansible_group') or '').strip()
-            if raw_group:
-                suffix = raw_group.replace('-', '_')
+            group_value = str(labels.get('ansible_group') or '').strip()
+            if group_value:
+                suffix = group_value.replace('-', '_')
                 if suffix.startswith(LABEL_GROUP_PREFIX):
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
@@ -349,7 +352,7 @@ class InventoryModule(BaseInventoryPlugin):
                 else:
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' имя группы "
-                        f"'{raw_group}' недопустимо (разрешены буквы, цифры, '_' и '-' "
+                        f"'{group_value}' недопустимо (разрешены буквы, цифры, '_' и '-' "
                         f"после префикса '{LABEL_GROUP_PREFIX}'), группа не создана"
                     )
 
