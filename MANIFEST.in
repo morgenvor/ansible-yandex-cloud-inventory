@@ -5,6 +5,9 @@ recursive-include examples *.yml
 recursive-include docs *.md
 # Стенд кладём в sdist: по архиву с PyPI можно проверить плагин без облака.
 recursive-include tests *.py *.sh *.yml *.json
+# Порядок боевой проверки (tests/live-check.sh) — README ссылается на него,
+# поэтому он должен быть и в архиве, а не только в репозитории.
+include tests/LIVE-CHECKS.md
 # Без этих файлов стенд из распакованного sdist не запускается: run-tests.sh
 # читает ansible.cfg, а .venv собирает bootstrap.sh по requirements-test.txt.
 include ansible.cfg

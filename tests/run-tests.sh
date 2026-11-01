@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 15 сценариев, 87 проверок.
+# Сейчас: 16 сценариев, 97 проверок.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -368,6 +368,32 @@ printf '%s\n' "$OUT" | head -5
 expect_in "INVENTORY yandex_cloud_inventory" "$OUT"
 expect_in "The host name is the VM name" "$OUT"
 expect_not_in "Unable to retrieve documentation" "$OUT"
+
+echo
+echo "=== 12. Боевой скрипт tests/live-check.sh проверен на заглушке ==="
+# Сам live-check.sh живёт для проверки настоящего каталога, поэтому в стенде он
+# не запускается без явного LIVE_PYTHONPATH: здесь заглушка SDK подставлена в
+# него руками. Так его утверждения не сгниют незамеченными.
+mkdir -p "$TMP/live"
+{
+    echo "plugin: yandex_cloud_inventory"
+    echo "folder_id: b1gfakefolder00000000"
+    echo "service_account_key_file: $PWD/tests/fake_sa_key.json"
+} >"$TMP/live/yc_inventory.yml"
+RC=0
+OUT="$(FAKE_YC_SCENARIO=bad_group LIVE_PYTHONPATH="$PWD/tests/fake_yc" \
+    LIVE_INVENTORY="$TMP/live/yc_inventory.yml" ./tests/live-check.sh 2>&1)" || RC=$?
+printf '%s\n' "$OUT" | tail -4
+expect_line "0" "$RC"
+expect_in "ok: web-app-vm: в группе yc_web_app" "$OUT"
+expect_in "ok: prefixed-vm: в группе yc_yc_docker" "$OUT"
+expect_in "ok: недопустимое значение метки сопровождается предупреждением" "$OUT"
+expect_in "ok: значение с готовым префиксом даёт предупреждение о двойном префиксе" "$OUT"
+expect_in "ok: --limit 'yc_web_servers' даёт 1 хост(ов), как в inventory" "$OUT"
+expect_in "ok: group_vars/yc_web_servers.yml применился к хосту ok-group-vm" "$OUT"
+expect_in "ok: group_vars/web_servers.yml не применился ни к одному хосту" "$OUT"
+expect_in "Живые проверки пройдены" "$OUT"
+expect_not_in "FAIL:" "$OUT"
 
 echo
 if [ "$FAIL" -ne 0 ]; then
