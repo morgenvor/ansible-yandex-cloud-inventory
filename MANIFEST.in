@@ -1,4 +1,5 @@
 include README.md
+include README.ru.md
 include LICENSE
 recursive-include inventory_plugins *.py
 recursive-include examples *.yml

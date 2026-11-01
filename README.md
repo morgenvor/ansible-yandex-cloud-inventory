@@ -1,136 +1,153 @@
 # Ansible Yandex Cloud Dynamic Inventory Plugin (fork + fixes)
 
-Динамический inventory-плагин Ansible для Yandex Cloud: получает Compute-инстансы
-и строит inventory по зонам и меткам.
+[Русский](README.ru.md) | **English**
 
-> **Это форк.** Оригинал — [mzatolokin/ansible-yandex-cloud-inventory](https://github.com/mzatolokin/ansible-yandex-cloud-inventory)
-> (upstream `main`, коммит `d2ad1ab`, автор Maksim Zatolokin, лицензия MIT).
-> Upstream не обновлялся около года, поэтому исправления выпускаются из форка
-> `morgenvor/ansible-yandex-cloud-inventory` в ветке `local-patches`.
-> Код upstream не присваивается: в этом репозитории он плюс фиксы.
-> Что именно исправлено, что изменилось в контракте меток и как перейти со
-> старой версии — в [`docs/upstream-differences.md`](docs/upstream-differences.md).
+An Ansible dynamic inventory plugin for Yandex Cloud: it reads Compute instances
+and builds an inventory grouped by availability zone and by VM labels.
 
-## Возможности
+> **This is a fork.** The original is
+> [mzatolokin/ansible-yandex-cloud-inventory](https://github.com/mzatolokin/ansible-yandex-cloud-inventory)
+> (upstream `main`, commit `d2ad1ab`, author Maksim Zatolokin, MIT license).
+> Upstream has not been updated for about a year, so fixes are released from
+> `morgenvor/ansible-yandex-cloud-inventory` (default branch `local-patches`;
+> `main` in the fork points at clean upstream and exists only as a sync point).
+> The upstream code is not claimed as new work: this repository is upstream
+> code plus fixes. What exactly changed, what the label contract is now and how
+> to migrate are described in
+> [`docs/upstream-differences.md`](docs/upstream-differences.md)
+> (that document is Russian-only for now).
 
-- Получает Compute-инстансы из Yandex Cloud
-- Аутентификация через IAM-токен или ключ сервисного аккаунта
-- Группы по зонам и пользовательским меткам
-- `ansible_host` — публичный IP (внутренний остаётся в `private_ipv4`), так что
-  подключение работает и с машины вне облака
-- Имя хоста — имя ВМ как есть, вместе с дефисами: `ansible web-1 -m ping` находит
-  именно `web-1`, а `web-1` и `web_1` остаются двумя разными хостами
-- Постраничное чтение `ListInstances`, поэтому ВМ не теряются после первой
-  страницы
-- Исключение инстанса меткой `ansible: false` (регистр значения не важен)
-- Метки ВМ экспортируются как `yc_label_<ключ>`, служебными переменными
-  становятся только `ansible_user` и `ansible_port` (белый список): метка не
-  может подменить адрес подключения или выполнить команду на контроллере
-- Дополнительные группы через метку `ansible_group` — только с префиксом `yc_`:
-  `ansible_group: docker` → группа `yc_docker`
+## Features
 
-## Установка
+- Reads Compute instances from Yandex Cloud
+- Authentication with an IAM token or a service account key
+- Groups by availability zone and by user labels
+- `ansible_host` is the public IP (the internal one stays in `private_ipv4`), so
+  connections work from outside the cloud as well
+- The host name is the VM name as is, dashes included: `ansible web-1 -m ping`
+  finds `web-1`, and `web-1` and `web_1` stay two different hosts
+- Paginated `ListInstances`, so VMs after the first page are not lost
+- An instance can be excluded with the `ansible: false` label (value is
+  case-insensitive)
+- VM labels are exported as `yc_label_<key>`; only `ansible_user` and
+  `ansible_port` become service variables (allowlist), so a label cannot
+  override the connection address or execute code on the controller
+- Extra groups through the `ansible_group` label — strictly with the `yc_`
+  prefix: `ansible_group: docker` creates the group `yc_docker`
+- A clear error instead of a traceback when the `yandexcloud` SDK is missing
 
-### Из исходного кода
+## Installation
 
-1. Клонируйте форк:
+### From source
+
+1. Clone the fork. The default branch `local-patches` is the fork code with the
+   fixes; `main` in the fork points at clean upstream and is only used for
+   synchronisation:
 ```bash
 git clone https://github.com/morgenvor/ansible-yandex-cloud-inventory.git
 cd ansible-yandex-cloud-inventory
-git checkout local-patches
 ```
 
-2. Поставьте зависимости и сам плагин — единственный источник зависимостей
-это `pyproject.toml`:
+2. Install the dependencies and the plugin — the single source of dependencies
+   is `pyproject.toml`:
 ```bash
 pip install -e .
 ```
 
-3. Сделайте плагин доступным для Ansible — вариант через `ansible.cfg`
-(см. раздел «Использование с ansible.cfg») или переменную окружения:
+3. Make the plugin visible to Ansible — either through `ansible.cfg` (see
+   "With ansible.cfg") or with an environment variable:
 ```bash
 export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 ```
 
-### Через `pip install` (и почему одного этого мало)
+### With `pip install` (and why that alone is not enough)
 
 ```bash
 pip install .
 ```
 
-Пакет встанет в `site-packages` и будет виден как Python-модуль, но
-**Ansible не найдёт плагин автоматически**: ansible-core (проверено на 2.19)
-загружает inventory-плагины только из каталогов плагинов и коллекций.
-`entry_points` для плагинов Ansible не читает вовсе — такого механизма в
-ansible-core нет (entry points там только у `console_scripts` и у ролей).
-Поэтому после установки укажите Ansible на каталог плагина внутри окружения:
+The package lands in `site-packages` and is importable as a Python module, but
+**Ansible will not find the plugin automatically**: ansible-core (verified on
+2.19) loads inventory plugins only from plugin directories and collections.
+`entry_points` are not read by Ansible at all — there is no such mechanism for
+plugins in ansible-core (entry points exist only for `console_scripts` and
+roles). So after installing, point Ansible at the plugin directory inside the
+environment:
 
 ```bash
-# путь внутри venv/site-packages, где лежит установленный inventory_plugins/
-# (запускать не из корня репозитория: иначе Python найдёт локальный каталог
-# inventory_plugins/ и покажет путь к исходникам, а не к установленному пакету)
+# path inside venv/site-packages where the installed inventory_plugins/ lives
+# (do not run this from the repository root: otherwise Python resolves the local
+# inventory_plugins/ directory and prints the path to the sources, not to the
+# installed package)
 export ANSIBLE_INVENTORY_PLUGINS="$(python -c 'import inventory_plugins, os; print(os.path.dirname(inventory_plugins.__file__))')"
 ```
 
-Проще всего — работать из исходников и держать `inventory_plugins = ./inventory_plugins`
-в `[defaults]` своего `ansible.cfg` (так устроен этот репозиторий).
+The simplest option is to work from the sources and keep
+`inventory_plugins = ./inventory_plugins` in `[defaults]` of your `ansible.cfg`
+(that is how this repository is set up).
 
-## Конфигурация
+Note that `pip install .` is also the step that installs the `yandexcloud` SDK.
+If you copy the plugin directory instead, install the SDK yourself
+(`pip install yandexcloud`), otherwise the plugin stops with an explicit error
+saying exactly that.
 
-### Аутентификация
+## Configuration
 
-Плагин поддерживает два метода.
+### Authentication
 
-#### Ключ сервисного аккаунта (рекомендуется)
+The plugin supports two methods.
 
-```yaml
-plugin: yandex_cloud_inventory
-folder_id: ваш-folder-id
-service_account_key_file: /путь/к/файлу/ключа/сервисного/аккаунта.json
-```
-
-#### IAM-токен (удобно для разовых проверок)
-
-**⚠️ Важно:** IAM-токен живёт 12 часов и требует обновления.
+#### Service account key (recommended)
 
 ```yaml
 plugin: yandex_cloud_inventory
-folder_id: ваш-folder-id
-iam_token: ваш-iam-токен
+folder_id: your-folder-id
+service_account_key_file: /path/to/service-account-key.json
 ```
 
-Токен можно не писать в файл, а взять из переменной окружения `YC_IAM_TOKEN`:
+#### IAM token (handy for one-off checks)
+
+**⚠️ Important:** an IAM token lives for 12 hours and has to be refreshed.
 
 ```yaml
 plugin: yandex_cloud_inventory
-folder_id: ваш-folder-id
-# iam_token будет автоматически взят из переменной окружения YC_IAM_TOKEN
+folder_id: your-folder-id
+iam_token: your-iam-token
 ```
 
-Обновление токена:
+The token does not have to be written to a file — it can come from the
+`YC_IAM_TOKEN` environment variable:
+
+```yaml
+plugin: yandex_cloud_inventory
+folder_id: your-folder-id
+# iam_token will be taken from the YC_IAM_TOKEN environment variable
+```
+
+Refreshing the token:
 
 ```bash
 yc iam create-token
 ```
 
-### Параметры
+### Options
 
-| Параметр | Обязательный | Описание |
+| Option | Required | Description |
 |----------|--------------|----------|
-| `plugin` | Да | Должен быть `yandex_cloud_inventory` |
-| `folder_id` | Да | ID папки Yandex Cloud |
-| `iam_token` | Нет* | IAM-токен для аутентификации |
-| `service_account_key_file` | Нет* | Путь к JSON-файлу ключа сервисного аккаунта |
-| `group` | Нет | Имя группы, куда добавляются все хосты |
+| `plugin` | Yes | Must be `yandex_cloud_inventory` |
+| `folder_id` | Yes | Yandex Cloud folder ID |
+| `iam_token` | No* | IAM token for authentication |
+| `service_account_key_file` | No* | Path to the service account key JSON file |
+| `group` | No | Group name every host is added to |
 
-\*Нужен либо `iam_token`, либо `service_account_key_file` (приоритет у ключа).
+\*Either `iam_token` or `service_account_key_file` is required (the key wins).
 
-### Пример конфигурации
+### Example configuration
 
-**Имя файла важно.** Плагин объявляет своим только файл `yc_inventory.yml`
-(`.yaml`) или `<префикс>_yc_inventory.yml` — разделитель `_` и непустой префикс
-обязательны, поэтому `inventory.yml` и `_yc_inventory.yml` он проигнорирует: так
-задумано, чтобы не перехватывать чужие inventory. Готовый пример —
+**The file name matters.** The plugin claims only `yc_inventory.yml`
+(`.yaml`) or `<prefix>_yc_inventory.yml` — the `_` separator and a non-empty
+prefix are mandatory, so `inventory.yml` and `_yc_inventory.yml` are ignored on
+purpose: that way foreign inventories are not intercepted. A ready example is
 [`examples/yc_inventory.yml`](examples/yc_inventory.yml):
 
 ```yaml
@@ -140,10 +157,10 @@ group: ycloud_group
 service_account_key_file: <YOUR_SERVICE_ACCOUNT_KEY_FILE>
 ```
 
-Или с токеном из окружения:
+Or with the token from the environment:
 
 ```bash
-export YC_IAM_TOKEN="ваш-iam-токен"
+export YC_IAM_TOKEN="your-iam-token"
 ```
 
 ```yaml
@@ -152,190 +169,214 @@ folder_id: <YOUR_FOLDER_ID>
 group: ycloud_group
 ```
 
-## Использование
+## Usage
 
-### Проверка inventory
+### Checking the inventory
 
 ```bash
 ansible-inventory -i yc_inventory.yml --list
 ansible-inventory -i yc_inventory.yml --graph --vars
 ```
 
-### С плейбуками
+### With playbooks
 
 ```bash
 ansible-playbook -i yc_inventory.yml playbook.yml
 ```
 
-### Подключение и `ansible_user`
+### Connection and `ansible_user`
 
-Плагин не задаёт пользователя подключения: если `ansible_user` не задан нигде,
-Ansible подключается от имени локального пользователя контроллера, а не от
-пользователя образа. Для ВМ, созданных через CLI, это обычно `yc-user`, для
-образов Ubuntu — `ubuntu`. Это поведение Ansible, а не дефект плагина: имя
-задаётся в плейбуке (`remote_user`), ключом `-u` или в `group_vars`.
+The plugin does not set the connection user: if `ansible_user` is not defined
+anywhere, Ansible connects as the local user of the controller, not as the user
+of the image. For VMs created through the CLI that is usually `yc-user`, for
+Ubuntu images `ubuntu`. This is Ansible behaviour, not a plugin defect: the name
+is set in the playbook (`remote_user`), with `-u`, or in `group_vars`.
 
-Порядок приоритета стоит держать в голове: метка `ansible_user` — это
-переменная хоста, поэтому она **перебивает** и `remote_user`, и `-u`
-(`play_context.set_task_and_variable_override()`: сначала применяются атрибуты
-задачи, затем magic-переменные из инвентаря).
+Keep the precedence order in mind: the `ansible_user` label is a host variable,
+so it **overrides** both `remote_user` and `-u`
+(`play_context.set_task_and_variable_override()`: task attributes are applied
+first, then magic variables from the inventory).
 
-### С `ansible.cfg`
+### With `ansible.cfg`
 
 ```ini
 [defaults]
-# Путь к плагину — именно в [defaults]; в [inventory] Ansible этот ключ не читает.
+# The plugin path goes into [defaults]; Ansible does not read this key in [inventory].
 inventory_plugins = ./inventory_plugins
 
 [inventory]
-# yaml обязателен: без него штатный static-inventory не парсится.
+# yaml is mandatory: without it a regular static inventory is not parsed.
 enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 ```
 
-`ansible.cfg` в корне репозитория — конфиг офлайн-стенда: в нём только путь к
-плагину и список `enable_plugins`, SSH стенду не нужен. Как образец для боевого
-конфига он годится, но проверьте остальные настройки сами: например
-`host_key_checking` здесь сознательно не выставлен, а отключать проверку ключей
-хоста на рабочей машине — отдельное решение, а не «настройка по умолчанию».
+The `ansible.cfg` in the repository root is the config of the offline test
+stand: it only sets the plugin path and `enable_plugins`, and the stand needs no
+SSH. It is usable as a sample for a production config, but check the remaining
+settings yourself: for example `host_key_checking` is deliberately not set here,
+and disabling host key checking on a workstation is a separate decision rather
+than a default.
 
-## Группировка инстансов
+## Grouping instances
 
-Плагин создаёт группы на основе:
+The plugin creates groups from:
 
-1. **Зон** — например, `ru_central1_a` (дефисы заменяются на `_`);
-2. **Метки `ansible_group`** — инстанс попадает в группу `yc_<значение>`
-   (значение `docker` даёт группу `yc_docker`, дефисы заменяются на `_`);
-3. **Параметра `group`** — если задан, все хосты добавляются в эту группу.
+1. **Zones** — for example `ru_central1_a` (dashes become `_`);
+2. **The `ansible_group` label** — the instance joins the group `yc_<value>`
+   (`docker` becomes `yc_docker`, dashes become `_`);
+3. **The `group` option** — if set, every host is added to that group.
 
-### Метки
+### Labels
 
-Метки ВМ — недоверенные данные: поставить их может любой, у кого есть доступ к
-каталогу. Поэтому «как есть» они в переменные хоста не попадают:
+VM labels are untrusted data: anyone with access to the folder can set them.
+That is why they never land in host variables as is:
 
-- любая метка экспортируется как `yc_label_<ключ>` (`-` в ключе заменяется на
-  `_`, значение остаётся прежним): `role: web-app` → `yc_label_role = web-app`;
-- служебными переменными становятся только `ansible_user` и `ansible_port`
-  (белый список): они применяются и как есть, и дублируются как `yc_label_*`.
-  Учтите: `ansible_user` — это переменная хоста, поэтому она **перебивает**
-  `remote_user` плейбука и `-u` в командной строке. Метку с этим ключом ставьте
-  осознанно, иначе «почему подключились не тем пользователем» ищется долго;
-- значения из белого списка проверяются: `ansible_port` должен быть числом
-  1–65535, `ansible_user` — непустым и без пробелов, кавычек и обратной косой
-  черты (оба уходят в командную строку `ssh`). Непригодное значение
-  отбрасывается с предупреждением и остаётся доступным как `yc_label_*`;
-- прочие метки, начинающиеся на `ansible_`, не применяются — плагин печатает
-  предупреждение с именем ВМ и ключом. Причина: метка `ansible_host` подменила
-  бы адрес подключения, а `ansible_ssh_common_args` с `ProxyCommand` выполнила
-  бы команду на контроллере;
-- две метки — директивы, а не переменные. Ключи нормализуются так же, как у
-  переменных, поэтому `ansible-group` и `ansible_group` — одна и та же метка:
-  - `ansible: false` — исключить инстанс из inventory (регистр не важен);
-  - `ansible_group: docker` — добавить инстанс в группу `yc_docker`.
-    Префикс `yc_` **обязателен и не настраивается**: без него метка вступала
-    бы в группы, которыми управляете вы (`dbservers`, `prod`), и к хосту
-    применялись бы их `group_vars` — с секретами или с `ansible_connection:
-    local`, то есть выполнением команд на контроллере. Вдобавок имя группы
-    уходит в путь `group_vars/<имя>`, а метку может поставить любой, у кого
-    есть доступ к каталогу: значение `../../outside/evil` читало файл за
-    пределами `group_vars`. Поэтому:
-    - `-` в значении заменяется на `_` (`web-app` → `yc_web_app`);
-    - остальное должно быть буквами, цифрами и `_`: иначе плагин печатает
-      предупреждение с именем ВМ и значением, группу **не создаёт**, а хост
-      остаётся в inventory (зона и `group`-опция не страдают);
-    - если значение уже начинается с `yc_`, второго префикса не угадываем:
-      `ansible_group: yc_docker` даёт `yc_yc_docker` и предупреждение в логе;
-    - сырое значение остаётся видимым в `yc_label_ansible_group`.
+- every label is exported as `yc_label_<key>` (`-` in the key becomes `_`, the
+  value is kept unchanged): `role: web-app` → `yc_label_role = web-app`;
+- only `ansible_user` and `ansible_port` become service variables (allowlist):
+  they are applied as is and also duplicated as `yc_label_*`. Note that
+  `ansible_user` is a host variable and therefore **overrides** `remote_user`
+  and `-u`. Set a label with this key deliberately, otherwise "why did we
+  connect as the wrong user" takes a long time to find;
+- the allowlist values are validated: `ansible_port` must be a number from 1 to
+  65535, `ansible_user` must be non-empty and free of spaces, quotes,
+  backslashes and non-printable characters (both end up on the `ssh` command
+  line, and a control sequence from a label would also reach the operator's
+  terminal and CI logs). An unusable value is dropped with a warning and stays
+  available as `yc_label_*`;
+- other labels starting with `ansible_` are not applied — the plugin prints a
+  warning with the VM name and the key. The reason: an `ansible_host` label
+  would override the connection address, and `ansible_ssh_common_args` with a
+  `ProxyCommand` would execute a command on the controller;
+- two labels are directives rather than variables. Keys are normalised the same
+  way as variable names, so `ansible-group` and `ansible_group` are the same
+  label:
+  - `ansible: false` — exclude the instance from the inventory (case does not
+    matter);
+  - `ansible_group: docker` — add the instance to the group `yc_docker`.
+    The `yc_` prefix is **mandatory and not configurable**: without it a label
+    would join groups you manage (`dbservers`, `prod`) and the host would get
+    their `group_vars` — with secrets or with `ansible_connection: local`, that
+    is, execution on the controller. On top of that, the group name becomes a
+    path `group_vars/<name>`, and a label can be set by anyone with access to
+    the folder: the value `../../outside/evil` read a file outside
+    `group_vars`. Therefore:
+    - `-` in the value becomes `_` (`web-app` → `yc_web_app`);
+    - the rest must be letters, digits and `_` (up to 63 characters): otherwise
+      the plugin prints a warning with the VM name and the value, does **not**
+      create the group, and the host stays in the inventory (zone and the
+      `group` option are unaffected);
+    - if the value already starts with `yc_`, the plugin does not guess:
+      `ansible_group: yc_docker` yields `yc_yc_docker` plus a warning in the log;
+    - the raw value stays visible in `yc_label_ansible_group`.
 
-Плагин также предупреждает, если у ВМ нет IPv4-адреса, если в ответе API
-встретились две ВМ с одним именем хоста и если два ключа меток совпали после
-нормализации (`a-b` и `a_b`).
+The plugin also warns when a VM has no IPv4 address and when two label keys
+collide after normalisation (`a-b` and `a_b`). Separately, there is a safeguard
+against a duplicate host name in the API response: Yandex Cloud requires VM
+names to be unique inside a folder, so that warning is aimed at an API failure
+rather than at a normal scenario (the test stand does not cover it — it cannot
+be reproduced; see [`docs/upstream-differences.md`](docs/upstream-differences.md),
+section 7).
 
-### Переменные хоста
+### Host variables
 
-Имя хоста — это имя ВМ в Yandex Cloud как есть, вместе с дефисами: ВМ `web-1`
-в inventory называется `web-1`, и `ansible web-1 -m ping` её находит. Через
-точку такие переменные не читаются (Jinja разберёт `web-1` как вычитание) —
-используйте `hostvars['web-1']`.
+The host name is the VM name in Yandex Cloud as is, dashes included: the VM
+`web-1` is called `web-1` in the inventory, and `ansible web-1 -m ping` finds
+it. Such variables cannot be read with dot notation (Jinja parses `web-1` as a
+subtraction) — use `hostvars['web-1']`.
 
-| Переменная | Значение |
+| Variable | Value |
 |---|---|
-| `ansible_host` | публичный IP, если он есть, иначе внутренний |
-| `ipv4` | публичный IP или `null`, если публичного адреса нет |
-| `private_ipv4` | внутренний IP |
-| `yc_name` | имя инстанса в Yandex Cloud |
-| `yc_label_<ключ>` | метка ВМ (например, `role: web-app` → `yc_label_role`) |
+| `ansible_host` | public IP if there is one, otherwise the internal one |
+| `ipv4` | public IP, or `null` when there is no public address |
+| `private_ipv4` | internal IP |
+| `yc_name` | instance name in Yandex Cloud |
+| `yc_label_<key>` | VM label (for example `role: web-app` → `yc_label_role`) |
 
-Служебные переменные из таблицы метками не переопределяются: все метки попадают
-только в `yc_label_*`. Исключение — белый список `ansible_user`/`ansible_port`
-(см. «Метки»).
+Labels cannot override the service variables from the table: every label goes to
+`yc_label_*` only. The exception is the `ansible_user`/`ansible_port` allowlist
+(see "Labels").
 
-## Переход со старой версии
+## Upgrading from older versions
 
-В 2.0 метки перестали быть переменными хоста напрямую (`role` → `yc_label_role`),
-в 3.0 имя хоста перестало нормализоваться (`web_1` → `web-1`), а группы из метки
-получили обязательный префикс `yc_`. Таблицы «было → стало» и порядок перехода —
-в [`docs/upstream-differences.md`](docs/upstream-differences.md), разделы 5 и 6.
+In 2.0 labels stopped being host variables directly (`role` → `yc_label_role`),
+in 3.0 the host name is no longer normalised (`web_1` → `web-1`) and groups from
+labels got the mandatory `yc_` prefix. The "before → after" tables and the
+migration order are in
+[`docs/upstream-differences.md`](docs/upstream-differences.md), sections 5 and 6
+(Russian).
 
-## Ограничения
+## Limitations
 
-- Параметр `cache` у `parse()` принимается для совместимости с интерфейсом
-  Ansible, но не используется: inventory каждый раз запрашивается у API.
-- Учитывается только первый сетевой интерфейс ВМ.
-- Плагин не смотрит на состояние ВМ: остановленная или вытесненная машина
-  остаётся в inventory, пока существует как ресурс.
-- Если API отказал (истёк IAM-токен, не хватает прав), Ansible выводит
-  предупреждение и продолжает работу с **пустым** inventory — так устроен разбор
-  источников. Плагин печатает причину и подсказку, но код возврата успешный;
-  в автоматике проверяйте, что inventory не пуст.
-- Группы `yc_*` — пространство меток, а не ваше: их создаёт `ansible_group`, и
-  чужие группы (например `dbservers`) меткой недостижимы. Обратная сторона: не
-  держите секреты в `group_vars/yc_*` — такую группу может создать любая ВМ
-  каталога и получить эти переменные.
+- The `cache` parameter of `parse()` is accepted for compatibility with the
+  Ansible interface but is not used: the inventory is requested from the API on
+  every run.
+- Only the first network interface of a VM is used.
+- The plugin does not look at the VM state: a stopped or preempted machine stays
+  in the inventory as long as it exists as a resource.
+- If the API refuses (expired IAM token, insufficient permissions), Ansible
+  prints a warning and continues with an **empty** inventory — that is how
+  source parsing works. The plugin prints the reason and a hint, but the exit
+  code stays successful; in automation, check that the inventory is not empty.
+- Groups `yc_*` are the label namespace, not yours: they are created by
+  `ansible_group`, and foreign groups (for example `dbservers`) are unreachable
+  through labels. The flip side: do not keep secrets in `group_vars/yc_*` — any
+  VM in the folder can create such a group and receive those variables.
 
-Полный список осознанных ограничений — в
-[`docs/upstream-differences.md`](docs/upstream-differences.md), раздел 7.
+The full list of deliberate limitations is in
+[`docs/upstream-differences.md`](docs/upstream-differences.md), section 7
+(Russian).
 
-## Требования
+## Requirements
 
 - Python 3.11+
-- ansible-core 2.18.6+
-- yandexcloud >= 0.99.0
+- ansible-core 2.18.18+ (2.18.18 is the first patch of the branch without
+  CVE-2026-11332)
+- yandexcloud >= 0.99.0, < 1.0 (verified on 0.99…0.412)
 
-Проверенные версии для стенда зафиксированы в `requirements-test.txt`
+The versions verified for the test stand are pinned in `requirements-test.txt`
 (`ansible-core==2.19.14`, `yandexcloud==0.412.0`).
 
-## Проверка без облака
+## Testing without a cloud
 
-Стенд подменяет SDK заглушкой (`tests/fake_yc/`) и гоняет настоящий
-`ansible-inventory` по восемнадцати сценариям — от меток и адресов до
-постраничной выдачи, `verify_file`, отказа API и инъекции метками. Всего 115
-проверок: при регрессе скрипт падает с ненулевым кодом и печатает, какое
-утверждение не выполнено. Что именно покрыто — в
-[`docs/upstream-differences.md`](docs/upstream-differences.md), раздел 8.
+The stand replaces the SDK with a stub (`tests/fake_yc/`) and runs the real
+`ansible-inventory` through eighteen scenarios — from labels and addresses to
+pagination, `verify_file`, API failures, label-driven injection and a missing
+SDK. There are 124 assertions in total: on a regression the script exits
+non-zero and prints which assertion failed. What exactly is covered is described
+in [`docs/upstream-differences.md`](docs/upstream-differences.md), section 8
+(Russian).
 
 ```bash
-./bootstrap.sh        # соберёт локальный .venv
-./tests/run-tests.sh  # прогон сценариев
+./bootstrap.sh        # builds a local .venv
+./tests/run-tests.sh  # runs the scenarios
 ```
 
-Стенд входит в sdist: плагин можно проверить по собранному архиву, без доступа
-к облаку и без клонирования репозитория.
+The stand ships in the sdist: the plugin can be verified from the built archive
+without cloud access and without cloning the repository.
 
-## Проверено на реальном облаке
+The same commands run in CI (GitHub Actions,
+[`.github/workflows/tests.yml`](.github/workflows/tests.yml)): on Python 3.11,
+3.12 and 3.13, plus a separate job from the unpacked sdist so that a file
+missing from `MANIFEST.in` does not go unnoticed.
 
-Кроме стенда, поведение проверено на живом каталоге Yandex Cloud (метки, приоритет
-`ansible_user`, имена с дефисами, `group_vars`); детали — в
-[`docs/upstream-differences.md`](docs/upstream-differences.md), раздел 8.
+## Verified on a real cloud
 
-Свой каталог проверяет [`tests/live-check.sh`](tests/live-check.sh) — он только
-читает облако: `LIVE_INVENTORY=secrets/live_yc_inventory.yml ./tests/live-check.sh`.
+Besides the stand, the behaviour was verified against a live Yandex Cloud folder
+(labels, `ansible_user` precedence, dashed names, `group_vars`); details are in
+[`docs/upstream-differences.md`](docs/upstream-differences.md), section 8
+(Russian).
 
-## Лицензия
+Your own folder can be checked with
+[`tests/live-check.sh`](tests/live-check.sh) — it only reads the cloud:
+`LIVE_INVENTORY=secrets/live_yc_inventory.yml ./tests/live-check.sh`.
 
-MIT — см. [LICENSE](LICENSE). Автор upstream-кода — Maksim Zatolokin;
-фиксы и упаковка форка — [morgenvor](https://github.com/morgenvor).
+## License
 
-## Поддержка
+MIT — see [LICENSE](LICENSE). The upstream code is by Maksim Zatolokin; the
+fixes and packaging of the fork are by
+[morgenvor](https://github.com/morgenvor).
 
-Проблемы форка — в issue репозитория `morgenvor/ansible-yandex-cloud-inventory`.
-Проблемы исходного плагина — в issue upstream.
+## Support
+
+Report fork issues in the `morgenvor/ansible-yandex-cloud-inventory`
+repository. Report issues of the original plugin upstream.
