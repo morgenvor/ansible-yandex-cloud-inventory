@@ -195,7 +195,7 @@ IPv4 и с пустым адресом, дефисы в именах ВМ, па�
 
 ```bash
 ./bootstrap.sh        # соберёт локальный .venv
-./tests/run-tests.sh  # 18 сценариев, 124 проверки
+./tests/run-tests.sh  # 18 сценариев, 127 проверок
 ```
 
 Те же команды выполняет CI (`.github/workflows/tests.yml`): матрица Python

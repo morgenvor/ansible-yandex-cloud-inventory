@@ -341,7 +341,7 @@ The versions verified for the test stand are pinned in `requirements-test.txt`
 The stand replaces the SDK with a stub (`tests/fake_yc/`) and runs the real
 `ansible-inventory` through eighteen scenarios — from labels and addresses to
 pagination, `verify_file`, API failures, label-driven injection and a missing
-SDK. There are 124 assertions in total: on a regression the script exits
+SDK. There are 127 assertions in total: on a regression the script exits
 non-zero and prints which assertion failed. What exactly is covered is described
 in [`docs/upstream-differences.md`](docs/upstream-differences.md), section 8
 (Russian).
