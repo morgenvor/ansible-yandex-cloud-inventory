@@ -1,0 +1,65 @@
+name: tests
+
+# Стенд офлайн: облако не нужно, SDK подменён заглушкой tests/fake_yc.
+# Задачи повторяют то, что мейнтейнер запускает локально (./bootstrap.sh,
+# ./tests/run-tests.sh), поэтому «зелёный» CI означает, что стенд работает у
+# постороннего человека с нуля, а не только на машине автора.
+
+on:
+  # Без фильтра по веткам: имя рабочей ветки может измениться, и CI не должен
+  # молча перестать запускаться после переименования.
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stand:
+    name: стенд, Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      # Actions запинены по SHA: тег можно переставить, коммит — нет.
+      # Версии: actions/checkout v5, actions/setup-python v5.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      # bootstrap.sh сам выберет uv или `python3 -m venv`; PYTHON указывает,
+      # какой интерпретатор брать, чтобы матрица версий действительно
+      # проверяла заявленный requires-python.
+      - name: Собрать окружение
+        run: PYTHON="$(command -v python3)" ./bootstrap.sh
+      - name: Прогнать стенд
+        run: ./tests/run-tests.sh
+
+  sdist:
+    name: стенд из распакованного sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Собрать окружение
+        run: PYTHON="$(command -v python3)" ./bootstrap.sh
+      # Проверка упаковки: файл, забытый в MANIFEST.in, не должен проходить
+      # незамеченным. Сборка идёт в отдельный каталог, чтобы не подхватить
+      # устаревший SOURCES.txt из рабочего дерева.
+      - name: Собрать sdist из чистого дерева
+        run: |
+          python3 -m pip install --upgrade build
+          git archive --format=tar HEAD | tar -x -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          python3 -m build --sdist --outdir "$RUNNER_TEMP/dist"
+      - name: Прогнать стенд из архива
+        run: |
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          tar xzf "$RUNNER_TEMP"/dist/*.tar.gz -C "$RUNNER_TEMP/unpacked"
+          cd "$RUNNER_TEMP"/unpacked/ansible_yandex_cloud_inventory-*
+          ANSIBLE_INVENTORY_BIN="$GITHUB_WORKSPACE/.venv/bin/ansible-inventory" ./tests/run-tests.sh
