@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 18 сценариев, 124 проверки.
+# Сейчас: 18 сценариев, 127 проверок.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -18,6 +18,10 @@ export PYTHONPATH="$PWD/tests/fake_yc"
 export ANSIBLE_CONFIG="$PWD/ansible.cfg"
 export ANSIBLE_HOME="$PWD/.ansible-home"
 export ANSIBLE_LOCAL_TEMP="$ANSIBLE_HOME/tmp"
+# Цвет в выводе ansible не должен влиять на проверки: escape-последовательности
+# в строках делают подстрочные утверждения нестабильными.
+export ANSIBLE_NOCOLOR=1
+unset ANSIBLE_FORCE_COLOR
 mkdir -p "$ANSIBLE_LOCAL_TEMP"
 # Сценарий «нет способа аутентификации» должен видеть именно пустое окружение,
 # а не токен, случайно оставленный в оболочке.
@@ -417,13 +421,46 @@ echo "=== 11. DOCUMENTATION плагина рендерится ansible-doc ==="
 # поэтому ошибку видно только здесь.
 DOC="${AI%/*}/ansible-doc"
 [ -x "$DOC" ] || { echo "Нет $DOC — создайте окружение: ./bootstrap.sh" >&2; exit 1; }
-# `|| true`: сломанная DOCUMENTATION роняет ansible-doc с ненулевым кодом, а с
-# `set -e` скрипт оборвался бы молча вместо читаемого FAIL.
-OUT="$("$DOC" -t inventory yandex_cloud_inventory 2>&1 || true)"
-printf '%s\n' "$OUT" | head -5
-expect_in "INVENTORY yandex_cloud_inventory" "$OUT"
-expect_in "The host name is the VM name" "$OUT"
-expect_not_in "Unable to retrieve documentation" "$OUT"
+# Две проверки, потому что они ловят разное.
+# 1) «Красивый» вывод должен рендериться: если в DOCUMENTATION пункт списка
+#    случайно стал словарём (двоеточие внутри пункта), ansible-doc падает с
+#    «expected string or bytes-like object», а ansible-inventory при этом
+#    работает — поэтому ошибку видно только здесь.
+# 2) Машинный вывод (`--json`) проверяется структурно: имя плагина и то, что
+#    description — список строк. Подстрочная проверка по вёрстке зависела от
+#    ширины терминала и версии ansible-doc и в CI ломалась на видном месте.
+DOC_ERRF="$TMP/doc.err"
+DOC_RC=0
+"$DOC" -t inventory yandex_cloud_inventory >/dev/null 2>"$DOC_ERRF" || DOC_RC=$?
+DOC_ERR="$(cat "$DOC_ERRF")"
+expect_line "0" "$DOC_RC"
+expect_not_in "expected string or bytes-like object" "$DOC_ERR"
+expect_not_in "Unable to retrieve documentation" "$DOC_ERR"
+DOC_JSON="$("$DOC" -t inventory yandex_cloud_inventory --json 2>>"$DOC_ERRF" || true)"
+read -r DOC_NAME DOC_DESC_TYPE DOC_DESC <<<"$(printf '%s' "$DOC_JSON" | python3 -c '
+import json, sys
+raw = sys.stdin.read()
+start = raw.find("{")
+try:
+    plugin = json.loads(raw[start:])["yandex_cloud_inventory"]["doc"]
+except Exception:
+    print("")
+    raise SystemExit
+desc = plugin.get("description") or []
+is_text = isinstance(desc, list) and all(isinstance(item, str) for item in desc)
+print(plugin.get("name", ""), "list[str]" if is_text else "bad-type",
+      " ".join(desc) if is_text else "")
+' 2>/dev/null || true)"
+printf '  ansible-doc: name=%s, description=%s\n' "${DOC_NAME:-<пусто>}" "${DOC_DESC_TYPE:-<пусто>}"
+expect_line "yandex_cloud_inventory" "$DOC_NAME"
+expect_line "list[str]" "$DOC_DESC_TYPE"
+expect_in "The host name is the VM name" "$DOC_DESC"
+# Если разбор не удался — показать, что именно вернул ansible-doc: иначе в логе
+# CI виден только FAIL, а причина — нет.
+if [ -z "$DOC_NAME" ] || [ "$DOC_DESC_TYPE" != "list[str]" ]; then
+    printf '  ansible-doc --json: %.400s\n' "$DOC_JSON"
+    printf '  stderr: %.400s\n' "$DOC_ERR"
+fi
 
 echo
 echo "=== 12. Боевой скрипт tests/live-check.sh проверен на заглушке ==="
@@ -439,7 +476,7 @@ mkdir -p "$TMP/live"
 RC=0
 OUT="$(FAKE_YC_SCENARIO=bad_group LIVE_PYTHONPATH="$PWD/tests/fake_yc" \
     LIVE_INVENTORY="$TMP/live/yc_inventory.yml" ./tests/live-check.sh 2>&1)" || RC=$?
-printf '%s\n' "$OUT" | tail -4
+tail -n 4 <<<"$OUT"
 expect_line "0" "$RC"
 expect_in "ok: web-app-vm: в группе yc_web_app" "$OUT"
 expect_in "ok: prefixed-vm: в группе yc_yc_docker" "$OUT"
@@ -457,7 +494,7 @@ echo "=== 13. Отказ API: понятное сообщение вместо �
 # пустым inventory, поэтому текст ошибки — единственное, по чему владелец
 # поймёт, что случилось (чаще всего истёк IAM-токен или не хватает прав).
 OUT="$(FAKE_YC_SCENARIO=api_error "$AI" -i "$INV" --list 2>&1)"
-printf '%s\n' "$OUT" | head -2
+head -n 2 <<<"$OUT"
 expect_in "не удалось получить список ВМ каталога" "$OUT"
 expect_in "Unauthenticated" "$OUT"
 expect_in "12 часов" "$OUT"
@@ -473,7 +510,7 @@ echo "=== 14. Нет SDK yandexcloud: понятная ошибка вместо
 # tests/fake_nosdk стоит в PYTHONPATH ПЕРЕД заглушкой SDK и падает при импорте.
 RC=0
 OUT="$(PYTHONPATH="$PWD/tests/fake_nosdk:$PYTHONPATH" "$AI" -i "$INV" --list 2>&1)" || RC=$?
-printf '%s\n' "$OUT" | head -3
+head -n 3 <<<"$OUT"
 expect_in "не установлен SDK yandexcloud" "$OUT"
 expect_in "pip install yandexcloud" "$OUT"
 expect_not_in "Unexpected Exception" "$OUT"
