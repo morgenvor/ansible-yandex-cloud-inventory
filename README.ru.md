@@ -61,8 +61,13 @@ export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 
 ### Через `pip install` (и почему одного этого мало)
 
+Дистрибутив на PyPI называется `ansible-yandex-cloud-inventory-fixed`: имя
+`ansible-yandex-cloud-inventory` принадлежит upstream. Из исходников ставится
+тот же пакет, так что обе команды ниже дают одно и то же:
+
 ```bash
-pip install .
+pip install ansible-yandex-cloud-inventory-fixed  # из PyPI
+pip install .                                     # из исходников
 ```
 
 Пакет встанет в `site-packages` и будет виден как Python-модуль, но

@@ -64,8 +64,13 @@ export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 
 ### With `pip install` (and why that alone is not enough)
 
+The distribution on PyPI is called `ansible-yandex-cloud-inventory-fixed`: the
+name `ansible-yandex-cloud-inventory` belongs to upstream. The same package can
+be installed from a source checkout, so both commands below give one package:
+
 ```bash
-pip install .
+pip install ansible-yandex-cloud-inventory-fixed  # from PyPI
+pip install .                                     # from the sources
 ```
 
 The package lands in `site-packages` and is importable as a Python module, but
