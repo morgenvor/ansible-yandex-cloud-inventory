@@ -410,6 +410,11 @@ NIC, интерфейс с пустым адресом (как его отдаё
 - метка `ansible_user` перебивает `-u`: с `-u root` ВМ отвечает «Please login as
   the user "ubuntu" rather than the user "root"», а с меткой `ansible_user=ubuntu`
   та же команда с `-u root` подключается пользователем `ubuntu`;
+- пара `web-1` (зона `ru-central1-e`) и `web_1` (зона `ru-central1-d`) даёт два
+  разных хоста, каждый в своей группе зоны, без предупреждения о дубле — в 2.x
+  нормализация дефиса склеила бы их в один хост и одна ВМ исчезла бы. Прогон
+  выполнен владельцем 2026-11-01 по командам из
+  [`tests/LIVE-CHECKS.md`](tests/LIVE-CHECKS.md);
 - `ansible: false` убирает ВМ из inventory, снятие метки возвращает её;
 - `ansible_host` = публичный IP, `private_ipv4` = внутренний.
 
