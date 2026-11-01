@@ -40,68 +40,6 @@ Repository = "https://github.com/morgenvor/ansible-yandex-cloud-inventory.git"
 Issues = "https://github.com/morgenvor/ansible-yandex-cloud-inventory/issues"
 Upstream = "https://github.com/mzatolokin/ansible-yandex-cloud-inventory"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
-]
-
-[project.scripts]
-# No scripts needed for this package
-
-[project.entry-points."ansible.plugins.inventory"]
-# Запись сохранена для совместимости с упаковкой upstream, но ansible-core 2.19
-# entry points для inventory-плагинов НЕ читает (проверено): плагин должен
-# лежать в каталоге из `inventory_plugins` ([defaults] ansible.cfg) или
-# ANSIBLE_INVENTORY_PLUGINS. См. README, раздел «Через pip install».
-yandex_cloud_inventory = "inventory_plugins.yandex_cloud_inventory:InventoryModule"
-
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["inventory_plugins*"]
-
-[tool.setuptools.package-data]
-"inventory_plugins" = ["*.py"]
-
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
-
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "yandexcloud.*",
-    "yandex.cloud.*",
-]
-ignore_missing_imports = true

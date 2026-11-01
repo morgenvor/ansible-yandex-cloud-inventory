@@ -54,9 +54,10 @@ cd ansible-yandex-cloud-inventory
 git checkout local-patches
 ```
 
-2. Установите зависимости:
+2. Поставьте зависимости и сам плагин — единственный источник зависимостей
+это `pyproject.toml`:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 3. Сделайте плагин доступным для Ansible — вариант через `ansible.cfg`
@@ -73,9 +74,10 @@ pip install .
 
 Пакет встанет в `site-packages` и будет виден как Python-модуль, но
 **Ansible не найдёт плагин автоматически**: ansible-core (проверено на 2.19)
-загружает inventory-плагины только из каталогов плагинов и коллекций, а запись
-`entry_points` из `pyproject.toml` не читает. Поэтому после установки укажите
-Ansible на каталог плагина внутри окружения:
+загружает inventory-плагины только из каталогов плагинов и коллекций.
+`entry_points` для плагинов Ansible не читает вовсе — такого механизма в
+ansible-core нет (entry points там только у `console_scripts` и у ролей).
+Поэтому после установки укажите Ansible на каталог плагина внутри окружения:
 
 ```bash
 # путь внутри venv/site-packages, где лежит установленный inventory_plugins/
