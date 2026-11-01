@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 13 сценариев, 72 проверки.
+# Сейчас: 15 сценариев, 87 проверок.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -125,10 +125,61 @@ expect_no_line "nexus_server ipv4 = " "$(hostvars "$JSON" nexus_server)"
 expect_line "docker-server yc_name = docker-server" "$VARS"
 # Фикс №7: ВМ с меткой ansible=false в inventory не попадает.
 expect_not_in "old-test-vm" "$KEYS"
-# Группировка: зона + метка ansible_group (директиву метки сохранили).
+# Группировка: зона + метка ansible_group. Группа из метки создаётся только
+# как yc_<значение>, чтобы метка не достала до групп владельца репозитория.
 GRAPH="$("$AI" -i "$INV" --graph 2>/dev/null)"
 expect_in "@ru_central1_a:" "$GRAPH"
-expect_in "@docker:" "$GRAPH"
+expect_in "@yc_docker:" "$GRAPH"
+expect_in "@yc_nexus_server:" "$GRAPH"
+
+echo
+echo "=== 1b. Метка ansible_group: недопустимое имя группу не создаёт ==="
+ERRF="$TMP/bad_group.err"
+JSON="$(FAKE_YC_SCENARIO=bad_group "$AI" -i "$INV" --list 2>"$ERRF")"
+ERR="$(cat "$ERRF")"
+HOSTGROUPS="$(hostgroups "$JSON")"
+printf '%s\n' "$ERR"
+printf '%s\n' "$HOSTGROUPS"
+# Значения меток Yandex Cloud не ограничивает, поэтому мусор в метке — не повод
+# терять хост: все ВМ остаются в inventory, пропадает только группа.
+expect_line "6" "$(hostcount "$JSON")"
+expect_in "'../../evil' недопустимо" "$ERR"
+expect_in "'web.dev' недопустимо" "$ERR"
+# Имя группы уходит в путь group_vars/<имя>: обход каталога и точки запрещены.
+expect_not_in "evil" "$HOSTGROUPS"
+expect_not_in "web.dev" "$HOSTGROUPS"
+# Дефис нормализуется в `_`, как у зон и ключей меток.
+expect_line "yc_web_app web-app-vm" "$HOSTGROUPS"
+expect_line "yc_web_servers ok-group-vm" "$HOSTGROUPS"
+# Данные не теряются: сырое значение видно в yc_label_ansible_group.
+expect_line "slash-vm yc_label_ansible_group = ../../evil" "$(hostvars "$JSON" slash-vm)"
+# Значение с готовым префиксом не «умничаем»: получается yc_yc_docker + warning.
+expect_in "уже начинается с 'yc_', группа будет 'yc_yc_docker'" "$ERR"
+expect_line "yc_yc_docker prefixed-vm" "$HOSTGROUPS"
+# Пустое после strip() значение пропускается молча: у ВМ только группа зоны.
+expect_line "1" "$(printf '%s\n' "$HOSTGROUPS" | grep -c ' blank-vm$' || true)"
+
+echo
+echo "=== 1c. Группа из метки не достаёт до group_vars без префикса ==="
+# Свойство безопасности целиком: метка ansible_group: docker больше не приводит
+# к применению group_vars/docker.yml (там могли быть секреты или
+# ansible_connection: local), а group_vars/yc_docker.yml работает как обычно.
+GRP="$TMP/grpvars"
+mkdir -p "$GRP/group_vars"
+{
+    echo "plugin: yandex_cloud_inventory"
+    echo "folder_id: b1gfakefolder00000000"
+    echo "service_account_key_file: $PWD/tests/fake_sa_key.json"
+} >"$GRP/yc_inventory.yml"
+printf 'from_yc_group: "yes"\n' >"$GRP/group_vars/yc_docker.yml"
+printf 'from_plain_group: "yes"\n' >"$GRP/group_vars/docker.yml"
+JSON="$("$AI" -i "$GRP/yc_inventory.yml" --list 2>/dev/null)"
+VARS="$(hostvars "$JSON" docker-server)"
+KEYS="$(hostkeys "$JSON")"
+printf '%s\n' "$VARS"
+expect_line "docker-server from_yc_group = yes" "$VARS"
+expect_no_line "docker-server from_plain_group = yes" "$VARS"
+expect_not_in "from_plain_group" "$KEYS"
 
 echo
 echo "=== 2. ВМ без сетевых интерфейсов: предупреждение, остальные на месте ==="

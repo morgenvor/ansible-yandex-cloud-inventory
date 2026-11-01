@@ -3,6 +3,7 @@ from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.utils.display import Display
 
 import os
+import re
 import json
 from yandexcloud import SDK
 from yandex.cloud.compute.v1.instance_service_pb2 import ListInstancesRequest
@@ -15,12 +16,13 @@ DOCUMENTATION = r'''
     description:
         - Fetches hosts from Yandex.Cloud Compute using a service account JSON key file or an existing IAM token.
         - The host name is the VM name exactly as it is in Yandex.Cloud, dashes included; Ansible accepts them in host names and warns only about group names.
-        - Hosts are grouped by availability zone (dashes replaced with underscores, because Ansible warns about invalid characters in group names) and by the C(ansible_group) label; the I(group) option adds every host to one more group.
+        - Hosts are grouped by availability zone (dashes replaced with underscores, because Ansible warns about invalid characters in group names) and by the C(ansible_group) label, which creates C(yc_<value>) with dashes replaced with underscores; the I(group) option adds every host to one more group and is used as is.
+        - The C(yc_) prefix is mandatory and cannot be disabled. A label is writable by anyone who can edit the folder, and without the prefix it could put a VM into a group that has its own C(group_vars) (with secrets or C(ansible_connection)) or into a path like C(group_vars/../../outside). If the value already starts with C(yc_), the result is C(yc_yc_<value>) and a warning is shown. The rest of the name must match C(^[A-Za-z0-9][A-Za-z0-9_]*$) — an invalid value is reported with a warning and no group is created, while the host stays in the inventory. The raw value is still available as C(yc_label_ansible_group).
         - Host variables are C(ansible_host) (public IPv4 address if the VM has one, otherwise the internal one), C(ipv4) (public IPv4 address or null), C(private_ipv4) (internal IPv4 address) and C(yc_name) (VM name in Yandex.Cloud).
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
         - Because C(ansible_user) is a host variable, it takes precedence over C(remote_user) in a play and over C(-u) on the command line, so set this label deliberately.
-        - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the named group.
+        - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the C(yc_<value>) group described above.
     options:
         plugin:
             description: Name of this plugin
@@ -54,6 +56,18 @@ display = Display()
 # ProxyCommand выполнит команду на контроллере. Поэтому все метки уходят под
 # префикс yc_label_, а служебными переменными становятся только эти ключи.
 ALLOWED_ANSIBLE_LABELS = frozenset({'ansible_user', 'ansible_port'})
+
+# local patch: группа из метки ansible_group создаётся только в пространстве
+# имён yc_<значение>. Причин две:
+#   а) метка не должна вступать в группы, которыми управляет владелец
+#      репозитория: Ansible применил бы к хосту их group_vars, а там бывают
+#      секреты и ansible_connection: local (выполнение на контроллере);
+#   б) имя группы уходит в путь group_vars/<имя>, а метки пишет любой, у кого
+#      есть доступ к каталогу: свободные символы в имени (`../../outside/evil`,
+#      `web.dev`) позволяют читать файлы за пределами group_vars, поэтому
+#      после префикса разрешены только буквы, цифры и `_`.
+LABEL_GROUP_PREFIX = 'yc_'
+LABEL_GROUP_RE = re.compile(r'^yc_[A-Za-z0-9][A-Za-z0-9_]{0,62}$')
 
 
 class InventoryModule(BaseInventoryPlugin):
@@ -246,10 +260,30 @@ class InventoryModule(BaseInventoryPlugin):
             self.inventory.add_group(zone)
             self.inventory.add_host(host_name, group=zone)
 
-            group_name = raw_labels.get('ansible_group')
-            if group_name:
-                self.inventory.add_group(group_name)
-                self.inventory.add_host(host_name, group=group_name)
+            # local patch: группа из метки создаётся только как yc_<значение>.
+            # Метка недоверенная, поэтому в группы владельца репозитория
+            # (dbservers, prod, ...) она попасть не может, а имя группы не
+            # выходит за пределы пространства yc_, пригодного для пути
+            # group_vars/<имя> (см. LABEL_GROUP_RE).
+            raw_group = str(raw_labels.get('ansible_group') or '').strip()
+            if raw_group:
+                suffix = raw_group.replace('-', '_')
+                if suffix.startswith(LABEL_GROUP_PREFIX):
+                    display.warning(
+                        f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
+                        f"'ansible_group' уже начинается с '{LABEL_GROUP_PREFIX}', "
+                        f"группа будет '{LABEL_GROUP_PREFIX}{suffix}'"
+                    )
+                group_name = LABEL_GROUP_PREFIX + suffix
+                if LABEL_GROUP_RE.match(group_name):
+                    self.inventory.add_group(group_name)
+                    self.inventory.add_host(host_name, group=group_name)
+                else:
+                    display.warning(
+                        f"yandex_cloud_inventory: у ВМ '{instance.name}' имя группы "
+                        f"'{raw_group}' недопустимо (разрешены буквы, цифры, '_' и '-' "
+                        f"после префикса '{LABEL_GROUP_PREFIX}'), группа не создана"
+                    )
 
             # Добавляем в основную группу, если указана
             if group:

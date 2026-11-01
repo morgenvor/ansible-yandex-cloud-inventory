@@ -159,6 +159,22 @@ PAGED = [
     for i in range(150)
 ]
 
+# Сценарий недопустимых значений метки ansible_group. Значения меток, в отличие
+# от имён ВМ, Yandex Cloud не ограничивает: поставить можно что угодно, а имя
+# группы уходит в путь group_vars/<имя>. Поэтому группа создаётся только как
+# yc_<значение> и только из букв, цифр и `_`; остальное — предупреждение и
+# отсутствие группы, но хост в inventory остаётся.
+BAD_GROUP = [
+    _vm("slash-vm", "ru-central1-a", {"ansible_group": "../../evil"}, internal="10.0.9.1"),
+    _vm("dot-vm", "ru-central1-a", {"ansible_group": "web.dev"}, internal="10.0.9.2"),
+    _vm("blank-vm", "ru-central1-a", {"ansible_group": "   "}, internal="10.0.9.3"),
+    _vm("web-app-vm", "ru-central1-a", {"ansible_group": "web-app"}, internal="10.0.9.4"),
+    _vm("ok-group-vm", "ru-central1-a", {"ansible_group": "web_servers"}, internal="10.0.9.5"),
+    # Значение уже с префиксом: префикс не «умничает», получается yc_yc_docker,
+    # а миграционная ловушка видна предупреждением в логе.
+    _vm("prefixed-vm", "ru-central1-a", {"ansible_group": "yc_docker"}, internal="10.0.9.6"),
+]
+
 # Сценарий фильтра по метке ansible: проверяем, что сравнение не зависит
 # от регистра значения (фикс №7). Контрольная ВМ с ansible=true должна остаться.
 CASE_LABELS = [

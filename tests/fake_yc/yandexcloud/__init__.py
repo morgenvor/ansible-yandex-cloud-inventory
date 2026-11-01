@@ -31,6 +31,7 @@ SCENARIOS = {
     "whitelist": fake_data.WHITELIST,
     "paged": fake_data.PAGED,
     "case_labels": fake_data.CASE_LABELS,
+    "bad_group": fake_data.BAD_GROUP,
 }
 
 
