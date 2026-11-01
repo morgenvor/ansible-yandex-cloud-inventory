@@ -7,8 +7,8 @@
 # скрипт проверяет именно это.
 #
 # Облако он НЕ меняет: только ListInstances через плагин и утверждения по
-# полученному inventory. Метки для проверок групп ставит владелец каталога,
-# порядок и откат — в tests/LIVE-CHECKS.md.
+# полученному inventory. Метки для проверок групп ставит владелец каталога —
+# ставить и снимать их вручную, см. docs/upstream-differences.md, §2 и §6.
 #
 # Запуск:
 #   LIVE_INVENTORY=secrets/live_yc_inventory.yml ./tests/live-check.sh

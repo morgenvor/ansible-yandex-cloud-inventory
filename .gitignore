@@ -127,8 +127,12 @@ ipython_config.py
 
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow
 __pypackages__/
+# Внутренние документы мейнтейнера: рабочие правила, журнал изменений и порядок
+# живой проверки каталога. Публике они не нужны, а в истории репозитория их быть
+# не должно.
 AGENTS.md
 CHANGELOG.md
+tests/LIVE-CHECKS.md
 
 # Celery stuff
 celerybeat-schedule
