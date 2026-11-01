@@ -95,12 +95,21 @@ NIC_NO_V4 = [
     ),
 ]
 
-# Сценарий коллизии имён хостов: `web-1` и `web_1` дают один и тот же хост
-# `web_1`, раньше вторая ВМ молча вытесняла первую. Зоны разные специально:
-# без этого не видно, что прежний хост остаётся в группе зоны другой ВМ.
-COLLIDE = [
+# Сценарий с дефисами в именах ВМ: `web-1` и `web_1` — ДВЕ разные ВМ.
+# До 3.0 дефис заменялся на `_`, оба имени давали один хост `web_1`, и одна
+# ВМ молча исчезала. Зоны разные специально: так видно, что каждый хост
+# остаётся в своей зоне, а не «живёт» сразу в двух.
+DASHES = [
     _vm("web-1", "ru-central1-a", {}, internal="10.0.7.1"),
     _vm("web_1", "ru-central1-b", {}, internal="10.0.7.2"),
+]
+
+# Сценарий дубля в ответе API: две записи с одним именем. Имена ВМ в каталоге
+# уникальны, поэтому так API отвечать не должен — но молчаливой перезаписи быть
+# не должно: плагин предупреждает, а не выдаёт один хост без объяснений.
+DUP = [
+    _vm("dup-vm", "ru-central1-a", {}, internal="10.0.8.1"),
+    _vm("dup-vm", "ru-central1-b", {}, internal="10.0.8.2"),
 ]
 
 # Сценарий инъекции через метки: ВМ пытается подменить адрес подключения и
@@ -154,8 +163,8 @@ PAGED = [
 # от регистра значения (фикс №7). Контрольная ВМ с ansible=true должна остаться.
 CASE_LABELS = [
     _vm("stay-vm", "ru-central1-a", {"ansible": "true"}, internal="10.0.3.1"),
-    _vm("skip_lower", "ru-central1-a", {"ansible": "false"}, internal="10.0.3.2"),
-    _vm("skip_upper", "ru-central1-a", {"ansible": "FALSE"}, internal="10.0.3.3"),
-    _vm("skip_title", "ru-central1-a", {"ansible": "False"}, internal="10.0.3.4"),
-    _vm("stay_nolabel", "ru-central1-a", {"env": "prod"}, internal="10.0.3.5"),
+    _vm("skip-lower", "ru-central1-a", {"ansible": "false"}, internal="10.0.3.2"),
+    _vm("skip-upper", "ru-central1-a", {"ansible": "FALSE"}, internal="10.0.3.3"),
+    _vm("skip-title", "ru-central1-a", {"ansible": "False"}, internal="10.0.3.4"),
+    _vm("stay-nolabel", "ru-central1-a", {"env": "prod"}, internal="10.0.3.5"),
 ]

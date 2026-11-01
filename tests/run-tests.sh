@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 11 сценариев, 60 проверок.
+# Сейчас: 13 сценариев, 72 проверки.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -102,19 +102,19 @@ print(len(json.load(sys.stdin)["_meta"]["hostvars"]))
 echo "=== 1. Каталог по умолчанию: yc_label_*, IP, группы, фильтр ansible=false ==="
 ERRF="$TMP/default.err"
 JSON="$("$AI" -i "$INV" --list 2>"$ERRF")"
-VARS="$(hostvars "$JSON" docker_server)"
+VARS="$(hostvars "$JSON" docker-server)"
 KEYS="$(hostkeys "$JSON")"
 printf '%s\n' "$VARS"
 # Метка уходит под безопасный префикс, значение с дефисом не портится (фикс №5).
-expect_line "docker_server yc_label_role = web-app" "$VARS"
+expect_line "docker-server yc_label_role = web-app" "$VARS"
 # Голой переменной role больше нет: метки не переопределяют переменные хоста.
-expect_no_line "docker_server role = web-app" "$VARS"
+expect_no_line "docker-server role = web-app" "$VARS"
 # Дефис в ключе метки заменяется на подчёркивание.
-expect_line "docker_server yc_label_owner_team = platform" "$VARS"
-expect_line "docker_server yc_label_env = prod" "$VARS"
+expect_line "docker-server yc_label_owner_team = platform" "$VARS"
+expect_line "docker-server yc_label_env = prod" "$VARS"
 # ansible_host — публичный IP (фикс №1); внутренний остаётся в private_ipv4.
-expect_line "docker_server ansible_host = 178.154.248.236" "$VARS"
-expect_line "docker_server private_ipv4 = 10.0.0.5" "$VARS"
+expect_line "docker-server ansible_host = 178.154.248.236" "$VARS"
+expect_line "docker-server private_ipv4 = 10.0.0.5" "$VARS"
 # ВМ без публичного IP живёт на внутреннем.
 expect_line "nexus_server ansible_host = 10.0.0.6" "$(hostvars "$JSON" nexus_server)"
 # Публичного адреса нет → ipv4 = None, а не пустая строка: реальный API отдаёт
@@ -122,9 +122,9 @@ expect_line "nexus_server ansible_host = 10.0.0.6" "$(hostvars "$JSON" nexus_ser
 expect_line "nexus_server ipv4 = None" "$(hostvars "$JSON" nexus_server)"
 expect_no_line "nexus_server ipv4 = " "$(hostvars "$JSON" nexus_server)"
 # Фикс №6: имя хоста не в зарезервированной переменной name.
-expect_line "docker_server yc_name = docker-server" "$VARS"
+expect_line "docker-server yc_name = docker-server" "$VARS"
 # Фикс №7: ВМ с меткой ansible=false в inventory не попадает.
-expect_not_in "old_test_vm" "$KEYS"
+expect_not_in "old-test-vm" "$KEYS"
 # Группировка: зона + метка ansible_group (директиву метки сохранили).
 GRAPH="$("$AI" -i "$INV" --graph 2>/dev/null)"
 expect_in "@ru_central1_a:" "$GRAPH"
@@ -138,8 +138,8 @@ ERR="$(cat "$ERRF")"
 printf '%s\n' "$ERR"
 expect_in "нет сетевых интерфейсов" "$ERR"
 expect_in "'broken-vm'" "$ERR"
-expect_not_in "broken_vm" "$(hostkeys "$JSON")"
-expect_line "healthy_vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy_vm)"
+expect_not_in "broken-vm" "$(hostkeys "$JSON")"
+expect_line "healthy-vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy-vm)"
 
 echo
 echo "=== 3. NIC без IPv4: предупреждение, остальные хосты на месте ==="
@@ -148,8 +148,8 @@ JSON="$(FAKE_YC_SCENARIO=nic_no_v4 "$AI" -i "$INV" --list 2>"$ERRF")"
 ERR="$(cat "$ERRF")"
 printf '%s\n' "$ERR"
 expect_in "на первом интерфейсе нет IPv4-адреса" "$ERR"
-expect_not_in "nov4_vm" "$(hostkeys "$JSON")"
-expect_line "healthy_vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy_vm)"
+expect_not_in "nov4-vm" "$(hostkeys "$JSON")"
+expect_line "healthy-vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy-vm)"
 
 echo
 echo "=== 3b. NIC без адреса в том виде, как его отдаёт реальный API (address='') ==="
@@ -159,64 +159,83 @@ ERR="$(cat "$ERRF")"
 printf '%s\n' "$ERR"
 expect_in "на первом интерфейсе нет IPv4-адреса" "$ERR"
 # Главное: хост НЕ должен попасть в inventory с пустым ansible_host.
-expect_not_in "nov4_vm" "$(hostkeys "$JSON")"
-expect_line "healthy_vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy_vm)"
+expect_not_in "nov4-vm" "$(hostkeys "$JSON")"
+expect_line "healthy-vm ansible_host = 178.154.248.99" "$(hostvars "$JSON" healthy-vm)"
 
 echo
-echo "=== 4. Коллизия имён хостов: web-1 и web_1, предупреждение, один хост ==="
-ERRF="$TMP/collide.err"
-JSON="$(FAKE_YC_SCENARIO=collide "$AI" -i "$INV" --list 2>"$ERRF")"
+echo "=== 4. Дефисы в имени ВМ: web-1 и web_1 — два разных хоста ==="
+ERRF="$TMP/dashes.err"
+JSON="$(FAKE_YC_SCENARIO=dashes "$AI" -i "$INV" --list 2>"$ERRF")"
 ERR="$(cat "$ERRF")"
 printf '%s\n' "$ERR"
-expect_in "у ВМ 'web-1' и 'web_1' совпадает имя хоста 'web_1'" "$ERR"
-expect_line "1" "$(hostcount "$JSON")"
-# Поведение прежнее: остаётся последняя ВМ (по порядку ответа API).
+# До 3.0 дефис заменялся на `_`, оба имени давали один хост, и одна ВМ
+# молча исчезала. Теперь имя хоста — имя ВМ как есть.
+expect_line "2" "$(hostcount "$JSON")"
+expect_line "web-1 ansible_host = 10.0.7.1" "$(hostvars "$JSON" web-1)"
 expect_line "web_1 ansible_host = 10.0.7.2" "$(hostvars "$JSON" web_1)"
-# И хост не остаётся в зоне вытесненной ВМ: снятый хост не должен жить
-# в двух зонах сразу.
+expect_line "web-1 yc_name = web-1" "$(hostvars "$JSON" web-1)"
+expect_line "web_1 yc_name = web_1" "$(hostvars "$JSON" web_1)"
+# Нормализации больше нет: у web_1 не должно быть адреса первой ВМ.
+expect_no_line "web_1 ansible_host = 10.0.7.1" "$(hostvars "$JSON" web_1)"
+# Никаких предупреждений о коллизии имён быть не должно.
+expect_not_in "совпадает имя хоста" "$ERR"
+expect_not_in "уже добавлен другой ВМ" "$ERR"
+# Каждый хост остаётся в зоне своей ВМ. Зона нормализуется (дефис → `_`).
 HOSTGROUPS="$(hostgroups "$JSON")"
 printf '%s\n' "$HOSTGROUPS"
-expect_no_line "ru_central1_a web_1" "$HOSTGROUPS"
+expect_line "ru_central1_a web-1" "$HOSTGROUPS"
 expect_line "ru_central1_b web_1" "$HOSTGROUPS"
+expect_no_line "ru_central1_a web_1" "$HOSTGROUPS"
+
+echo
+echo "=== 4b. Дубль имени в ответе API: предупреждение, а не молчаливая перезапись ==="
+ERRF="$TMP/dup.err"
+JSON="$(FAKE_YC_SCENARIO=dup "$AI" -i "$INV" --list 2>"$ERRF")"
+ERR="$(cat "$ERRF")"
+printf '%s\n' "$ERR"
+expect_in "хост 'dup-vm' уже добавлен другой ВМ" "$ERR"
+expect_line "1" "$(hostcount "$JSON")"
+# Перезапись видна в данных: остаётся последняя запись, как её отдал API.
+expect_line "dup-vm ansible_host = 10.0.8.2" "$(hostvars "$JSON" dup-vm)"
 
 echo
 echo "=== 5. Инъекция метками: ansible_host/ansible_ssh_common_args не применяются ==="
 ERRF="$TMP/inject.err"
 JSON="$(FAKE_YC_SCENARIO=inject "$AI" -i "$INV" --list 2>"$ERRF")"
 ERR="$(cat "$ERRF")"
-VARS="$(hostvars "$JSON" inject_vm)"
+VARS="$(hostvars "$JSON" inject-vm)"
 KEYS="$(hostkeys "$JSON")"
 printf '%s\n' "$VARS"
 printf '%s\n' "$ERR"
 # Метка ansible_host не подменяет адрес подключения: остаётся реальный публичный IP.
-expect_line "inject_vm ansible_host = 178.154.248.50" "$VARS"
+expect_line "inject-vm ansible_host = 178.154.248.50" "$VARS"
 # Метка ansible_ssh_common_args не становится переменной хоста вовсе.
-expect_no_line "inject_vm ansible_ssh_common_args" "$KEYS"
+expect_no_line "inject-vm ansible_ssh_common_args" "$KEYS"
 # Но данные не потеряны: они лежат под безопасным префиксом.
-expect_line "inject_vm yc_label_ansible_host = 203.0.113.99" "$VARS"
-expect_line "inject_vm yc_label_ansible_ssh_common_args = -o ProxyCommand=touch /tmp/pwned" "$VARS"
+expect_line "inject-vm yc_label_ansible_host = 203.0.113.99" "$VARS"
+expect_line "inject-vm yc_label_ansible_ssh_common_args = -o ProxyCommand=touch /tmp/pwned" "$VARS"
 # Пользователь предупреждён по каждому такому ключу.
 expect_in "метка 'ansible_host' не применяется как служебная переменная" "$ERR"
 expect_in "метка 'ansible_ssh_common_args' не применяется как служебная переменная" "$ERR"
 # Белый список работает: ansible_user применяется и дублируется под префиксом.
-expect_line "inject_vm ansible_user = deploy" "$VARS"
-expect_line "inject_vm yc_label_ansible_user = deploy" "$VARS"
+expect_line "inject-vm ansible_user = deploy" "$VARS"
+expect_line "inject-vm yc_label_ansible_user = deploy" "$VARS"
 # Контрольная ВМ никуда не пропала.
 expect_line "2" "$(hostcount "$JSON")"
-expect_line "control_vm ansible_host = 178.154.248.51" "$(hostvars "$JSON" control_vm)"
+expect_line "control-vm ansible_host = 178.154.248.51" "$(hostvars "$JSON" control-vm)"
 
 echo
 echo "=== 6. Белый список: ansible_user/ansible_port применяются, ansible_bad_arg — нет ==="
 ERRF="$TMP/whitelist.err"
 JSON="$(FAKE_YC_SCENARIO=whitelist "$AI" -i "$INV" --list 2>"$ERRF")"
 ERR="$(cat "$ERRF")"
-VARS="$(hostvars "$JSON" wl_vm)"
+VARS="$(hostvars "$JSON" wl-vm)"
 KEYS="$(hostkeys "$JSON")"
 printf '%s\n' "$VARS"
-expect_line "wl_vm ansible_user = deploy" "$VARS"
-expect_line "wl_vm ansible_port = 2222" "$VARS"
-expect_no_line "wl_vm ansible_bad_arg" "$KEYS"
-expect_line "wl_vm yc_label_ansible_bad_arg = x" "$VARS"
+expect_line "wl-vm ansible_user = deploy" "$VARS"
+expect_line "wl-vm ansible_port = 2222" "$VARS"
+expect_no_line "wl-vm ansible_bad_arg" "$KEYS"
+expect_line "wl-vm yc_label_ansible_bad_arg = x" "$VARS"
 expect_in "метка 'ansible_bad_arg' не применяется как служебная переменная" "$ERR"
 
 echo
@@ -245,11 +264,11 @@ echo "=== 9. Метка ansible=false в любом регистре (фикс �
 JSON="$(FAKE_YC_SCENARIO=case_labels "$AI" -i "$INV" --list 2>/dev/null)"
 KEYS="$(hostkeys "$JSON")"
 printf '%s\n' "$KEYS"
-expect_in "stay_vm" "$KEYS"
-expect_in "stay_nolabel" "$KEYS"
-expect_not_in "skip_lower" "$KEYS"
-expect_not_in "skip_upper" "$KEYS"
-expect_not_in "skip_title" "$KEYS"
+expect_in "stay-vm" "$KEYS"
+expect_in "stay-nolabel" "$KEYS"
+expect_not_in "skip-lower" "$KEYS"
+expect_not_in "skip-upper" "$KEYS"
+expect_not_in "skip-title" "$KEYS"
 
 echo
 echo "=== 10. Аутентификация: приоритет ключа, YC_IAM_TOKEN, ошибки ==="
@@ -282,6 +301,22 @@ expect_in "Service account key file not found: tests/absent_sa_key.json" "$ERR"
 ERR="$("$AI" -i "$PWD/tests/no_folder_yc_inventory.yml" --list 2>&1 >/dev/null)"
 printf '%s\n' "$ERR"
 expect_in "Required config 'folder_id' for 'yandex_cloud_inventory' inventory plugin not provided" "$ERR"
+
+echo
+echo "=== 11. DOCUMENTATION плагина рендерится ansible-doc ==="
+# Проверка не косметическая: YAML в DOCUMENTATION легко сделать словарём
+# вместо списка (достаточно двоеточия внутри пункта), и ansible-doc падает с
+# «expected string or bytes-like object» — при этом ansible-inventory работает,
+# поэтому ошибку видно только здесь.
+DOC="${AI%/*}/ansible-doc"
+[ -x "$DOC" ] || { echo "Нет $DOC — создайте окружение: ./bootstrap.sh" >&2; exit 1; }
+# `|| true`: сломанная DOCUMENTATION роняет ansible-doc с ненулевым кодом, а с
+# `set -e` скрипт оборвался бы молча вместо читаемого FAIL.
+OUT="$("$DOC" -t inventory yandex_cloud_inventory 2>&1 || true)"
+printf '%s\n' "$OUT" | head -5
+expect_in "INVENTORY yandex_cloud_inventory" "$OUT"
+expect_in "The host name is the VM name" "$OUT"
+expect_not_in "Unable to retrieve documentation" "$OUT"
 
 echo
 if [ "$FAIL" -ne 0 ]; then

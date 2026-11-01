@@ -11,14 +11,15 @@ from yandex.cloud.compute.v1.instance_service_pb2_grpc import InstanceServiceStu
 
 DOCUMENTATION = r'''
     name: yandex_cloud_inventory
-    plugin_type: inventory
     short_description: Yandex.Cloud dynamic inventory using service account key or IAM token
     description:
         - Fetches hosts from Yandex.Cloud Compute using a service account JSON key file or an existing IAM token.
-        - Hosts are grouped by availability zone (dashes replaced with underscores) and by the C(ansible_group) label; the I(group) option adds every host to one more group.
+        - The host name is the VM name exactly as it is in Yandex.Cloud, dashes included; Ansible accepts them in host names and warns only about group names.
+        - Hosts are grouped by availability zone (dashes replaced with underscores, because Ansible warns about invalid characters in group names) and by the C(ansible_group) label; the I(group) option adds every host to one more group.
         - Host variables are C(ansible_host) (public IPv4 address if the VM has one, otherwise the internal one), C(ipv4) (public IPv4 address or null), C(private_ipv4) (internal IPv4 address) and C(yc_name) (VM name in Yandex.Cloud).
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
+        - Because C(ansible_user) is a host variable, it takes precedence over C(remote_user) in a play and over C(-u) on the command line, so set this label deliberately.
         - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the named group.
     options:
         plugin:
@@ -131,10 +132,6 @@ class InventoryModule(BaseInventoryPlugin):
         if group:
             self.inventory.add_group(group)
 
-        # local patch: имя хоста — это имя ВМ с заменой дефисов; `web-1` и `web_1`
-        # давали один хост, и одна из ВМ молча пропадала. Теперь предупреждаем.
-        host_sources = {}
-
         for instance in instances:
             # local patch: ВМ без сетевых интерфейсов роняла плагин с
             # IndexError, а Ansible после этого молча отдавал пустой inventory.
@@ -174,16 +171,17 @@ class InventoryModule(BaseInventoryPlugin):
             if str(raw_labels.get('ansible', '')).lower() == 'false':
                 continue
 
-            host_name = instance.name.replace("-", "_")
+            # local patch: имя хоста — это имя ВМ как есть, дефисы сохраняются.
+            # Ansible дефис в имени хоста принимает (предупреждает он только про
+            # имена групп), а имена ВМ в каталоге уникальны. Раньше здесь стояла
+            # замена `-` на `_`: `web-1` и `web_1` давали один хост, одна из ВМ
+            # молча пропадала, а `ansible web-1` не находил хост.
+            host_name = instance.name
+            # Зону нормализуем намеренно: Ansible предупреждает о недопустимых
+            # символах в имени группы, а `force_valid_group_names` по умолчанию
+            # `never` — значит, без замены поведение зависело бы от чужого
+            # ansible.cfg и каждый запуск сыпал бы предупреждением.
             zone = instance.zone_id.replace("-", "_")
-
-            if host_name in host_sources:
-                display.warning(
-                    f"yandex_cloud_inventory: у ВМ '{host_sources[host_name]}' и "
-                    f"'{instance.name}' совпадает имя хоста '{host_name}', "
-                    f"в inventory останется последняя"
-                )
-            host_sources[host_name] = instance.name
 
             # local patch: в upstream значения меток тоже портились (web-app -> web_app),
             # что незаметно меняло данные. Чистим только ключи: они становятся именами
@@ -211,13 +209,14 @@ class InventoryModule(BaseInventoryPlugin):
             # отсеяно выше, значит ansible_ip всегда непустой.
             ansible_ip = external_ip if external_ip else internal_ip
 
-            # Добавляем хост. local patch: если имя уже занято другой ВМ, прежний
-            # хост снимаем целиком (remove_host убирает его из всех групп), иначе
-            # он остаётся в группе зоны предыдущей ВМ — хост «жил» сразу в двух
-            # зонах. Снимаем только перед реальным добавлением: ВМ, пропущенная
-            # выше по continue, не должна стирать уже добавленный хост.
+            # Имена ВМ в каталоге уникальны, поэтому совпадение имени хоста
+            # означает дубль в ответе API, а не коллизию после нормализации.
+            # Молчаливой перезаписи быть не должно — предупреждаем.
             if self.inventory.get_host(host_name):
-                self.inventory.remove_host(self.inventory.get_host(host_name))
+                display.warning(
+                    f"yandex_cloud_inventory: хост '{host_name}' уже добавлен "
+                    f"другой ВМ, переменные перезаписаны"
+                )
             self.inventory.add_host(host_name)
 
             # Служебные переменные. Переопределить их метками нельзя по
