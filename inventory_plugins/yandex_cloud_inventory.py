@@ -33,11 +33,11 @@ DOCUMENTATION = r'''
         - Fetches hosts from Yandex.Cloud Compute using a service account JSON key file or an existing IAM token.
         - The host name is the VM name exactly as it is in Yandex.Cloud, dashes included; Ansible accepts them in host names and warns only about group names.
         - Hosts are grouped by availability zone (dashes replaced with underscores, because Ansible warns about invalid characters in group names) and by the C(ansible_group) label, which creates C(yc_<value>) with dashes replaced with underscores; the I(group) option adds every host to one more group and is used as is.
-        - The C(yc_) prefix is mandatory and cannot be disabled. A label is writable by anyone who can edit the folder, and without the prefix it could put a VM into a group that has its own C(group_vars) (with secrets or C(ansible_connection)) or into a path like C(group_vars/../../outside). If the value already starts with C(yc_), the result is C(yc_yc_<value>) and a warning is shown. The rest of the name must match C(^[A-Za-z0-9][A-Za-z0-9_]{0,62}$) — letters, digits and C(_), at most 63 characters — an invalid value is reported with a warning and no group is created, while the host stays in the inventory. The raw value is still available as C(yc_label_ansible_group).
+        - The C(yc_) prefix is mandatory and cannot be disabled. A label is writable by anyone who can edit the folder, and without the prefix it could put a VM into a group that has its own C(group_vars) (with secrets or C(ansible_connection)) or into a path like C(group_vars/../../outside). If the value already starts with C(yc_), the result is C(yc_yc_<value>) and a warning is shown. The rest of the name must match C(^[A-Za-z0-9][A-Za-z0-9_]{0,62}$) — letters, digits and C(_), at most 63 characters — because the group name becomes a path C(group_vars/<name>) and a length limit keeps it compatible with label values. An invalid value is reported with a warning and no group is created, while the host stays in the inventory. The raw value is still available as C(yc_label_ansible_group).
         - Host variables are C(ansible_host) (public IPv4 address if the VM has one, otherwise the internal one), C(ipv4) (public IPv4 address or null), C(private_ipv4) (internal IPv4 address) and C(yc_name) (VM name in Yandex.Cloud).
         - Every VM label becomes the host variable C(yc_label_<key>); dashes in the key are replaced with underscores, values are kept as is. Labels never override the service variables above.
         - The only labels applied as service variables as well are C(ansible_user) and C(ansible_port). Any other C(ansible_*) label is kept as C(yc_label_<key>) and reported with a warning, because labels are writable by anyone who can edit the folder and could otherwise inject connection settings (for example C(ansible_ssh_common_args) with a C(ProxyCommand) executed on the controller).
-        - The values of the two allowed labels are validated — C(ansible_port) must be a number from 1 to 65535, C(ansible_user) must not be empty and must not contain spaces, quotes or backslashes (they are passed to C(ssh) as C(-o Port=...) and C(-o User="...")). An unusable value is reported with a warning, is not applied as a service variable, and stays available as C(yc_label_<key>).
+        - The values of the two allowed labels are validated — C(ansible_port) must be a number from 1 to 65535, C(ansible_user) must not be empty and must not contain spaces, quotes, backslashes or non-printable characters (they are passed to C(ssh) as C(-o Port=...) and C(-o User="..."), and a control character from a label would also end up in the operator's terminal and in CI logs). An unusable value is reported with a warning, is not applied as a service variable, and stays available as C(yc_label_<key>).
         - Because C(ansible_user) is a host variable, it takes precedence over C(remote_user) in a play and over C(-u) on the command line, so set this label deliberately.
         - Two labels are directives rather than variables. C(ansible) with the value C(false) (case-insensitive) removes the VM from the inventory, C(ansible_group) adds the VM to the C(yc_<value>) group described above. Both are read after key normalization, so a label spelled C(ansible-group) works exactly like C(ansible_group).
     options:
@@ -107,8 +107,11 @@ def _invalid_whitelist_reason(key, value):
         return ''
     if not text.strip():
         return "логин пустой"
-    if any(ch.isspace() or ch in '"\'\\' for ch in text):
-        return f"логин содержит пробел, кавычку или обратную косую черту: {text!r}"
+    if any(ch.isspace() or not ch.isprintable() or ch in '"\'\\' for ch in text):
+        return (
+            "логин содержит пробел, кавычку, обратную косую черту "
+            f"или непечатаемый символ: {text!r}"
+        )
     return ''
 
 
@@ -248,8 +251,8 @@ class InventoryModule(BaseInventoryPlugin):
                 if normalized in labels:
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' метки "
-                        f"'{label_sources[normalized]}' и '{key}' дают одну "
-                        f"переменную '{normalized}', значение '{key}' затирает "
+                        f"{label_sources[normalized]!r} и {key!r} дают одну "
+                        f"переменную {normalized!r}, значение {key!r} затирает "
                         f"предыдущее"
                     )
                 labels[normalized] = value
@@ -286,9 +289,11 @@ class InventoryModule(BaseInventoryPlugin):
             # отсеяно выше, значит ansible_ip всегда непустой.
             ansible_ip = external_ip if external_ip else internal_ip
 
-            # Имена ВМ в каталоге уникальны, поэтому совпадение имени хоста
-            # означает дубль в ответе API, а не коллизию после нормализации.
-            # Молчаливой перезаписи быть не должно — предупреждаем.
+            # local patch: имена ВМ в каталоге уникальны, поэтому совпадение
+            # имени хоста возможно только при дубле в ответе API. Предупреждение
+            # оставлено страховкой: молчаливой перезаписи быть не должно. Стенд
+            # этот путь не проверяет — по правилам Yandex Cloud он недостижим
+            # (docs/upstream-differences.md, §7).
             if self.inventory.get_host(host_name):
                 display.warning(
                     f"yandex_cloud_inventory: хост '{host_name}' уже добавлен "
@@ -314,7 +319,7 @@ class InventoryModule(BaseInventoryPlugin):
                     if key.startswith('ansible_') and key != 'ansible_group':
                         display.warning(
                             f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
-                            f"'{key}' не применяется как служебная переменная "
+                            f"{key!r} не применяется как служебная переменная "
                             f"(осталась как yc_label_{key})"
                         )
                     continue
@@ -329,7 +334,7 @@ class InventoryModule(BaseInventoryPlugin):
                 if reason:
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
-                        f"'{key}' со значением '{value}' не применена как "
+                        f"{key!r} со значением {value!r} не применена как "
                         f"служебная переменная: {reason} "
                         f"(осталась как yc_label_{key})"
                     )
@@ -356,7 +361,7 @@ class InventoryModule(BaseInventoryPlugin):
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' метка "
                         f"'ansible_group' уже начинается с '{LABEL_GROUP_PREFIX}', "
-                        f"группа будет '{LABEL_GROUP_PREFIX}{suffix}'"
+                        f"группа будет {(LABEL_GROUP_PREFIX + suffix)!r}"
                     )
                 group_name = LABEL_GROUP_PREFIX + suffix
                 if LABEL_GROUP_RE.match(group_name):
@@ -365,8 +370,9 @@ class InventoryModule(BaseInventoryPlugin):
                 else:
                     display.warning(
                         f"yandex_cloud_inventory: у ВМ '{instance.name}' имя группы "
-                        f"'{group_value}' недопустимо (разрешены буквы, цифры, '_' и '-' "
-                        f"после префикса '{LABEL_GROUP_PREFIX}'), группа не создана"
+                        f"{group_value!r} недопустимо (после префикса "
+                        f"'{LABEL_GROUP_PREFIX}' разрешены буквы, цифры и '_', "
+                        f"длина — до 63 символов), группа не создана"
                     )
 
             # Добавляем в основную группу, если указана

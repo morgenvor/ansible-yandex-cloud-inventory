@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 18 сценариев, 120 проверок.
+# Сейчас: 18 сценариев, 123 проверки.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -318,6 +318,13 @@ expect_line "wl-bad-vm yc_label_ansible_user = bad user" "$VARS"
 expect_line "wl-bad-vm yc_label_ansible_port = not-a-port" "$VARS"
 expect_in "метка 'ansible_port' со значением 'not-a-port' не применена" "$ERR"
 expect_in "метка 'ansible_user' со значением 'bad user' не применена" "$ERR"
+# Непечатаемый символ в значении: не применяется, а в лог уходит repr, а не
+# сырой ESC — иначе терминал оператора или лог CI исполнил бы управляющую
+# последовательность из недоверенной метки.
+KEYS="$(hostkeys "$JSON")"
+expect_no_line "wl-esc-vm ansible_user" "$KEYS"
+expect_in "метка 'ansible_user' со значением 'root\\x1b[31m' не применена" "$ERR"
+expect_not_in "$(printf '\033')" "$ERR"
 
 echo
 echo "=== 7. Пагинация: 150 ВМ в двух страницах ==="
