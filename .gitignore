@@ -14,12 +14,23 @@ venv/
 .uv-cache/
 .ansible-home/
 # Реальные inventory-файлы с folder_id/токенами держим вне git.
+# Плагин забирает ровно два вида имён — `yc_inventory.yml` и
+# `<префикс>_yc_inventory.yml` (см. verify_file), поэтому закрываем обе формы:
+# иначе настроенный по примеру из README `prod_yc_inventory.yml` с folder_id и
+# IAM-токеном ушёл бы в git мимо этих правил.
 # Исключения ниже обязательны: тестовые фикстуры и пример — это не секреты,
 # и без них стенд tests/run-tests.sh не запустится у клонировавшего форк.
 yc_inventory.yml
+*_yc_inventory.yml
+*_yc_inventory.yaml
 inventory.yml
 !tests/yc_inventory.yml
+!tests/_yc_inventory.yml
+!tests/*_yc_inventory.yml
+!tests/*_yc_inventory.yaml
 !examples/yc_inventory.yml
+!examples/*_yc_inventory.yml
+!examples/*_yc_inventory.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

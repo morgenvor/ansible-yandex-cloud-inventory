@@ -74,18 +74,18 @@ class InventoryModule(BaseInventoryPlugin):
     NAME = 'yandex_cloud_inventory'
 
     # local patch: плагин объявляет своим только файл вида yc_inventory.yml или
-    # <что-то>_yc_inventory.yml (и .yaml). В upstream здесь был
+    # <непустой-префикс>_yc_inventory.yml (и .yaml). В upstream здесь был
     # `path.endswith(('yml', 'yaml'))`, из-за чего плагин забирал себе ЛЮБОЙ
     # yaml-inventory и падал на нём с "Incorrect plugin name".
     # Разделитель `_` обязателен: без него перехватывался `myyc_inventory.yml`.
+    # Префикс перед `_` тоже обязателен: `_yc_inventory.yml` — это не «имя с
+    # разделителем», а файл без имени, и забирать его плагин не должен.
+    INVENTORY_FILE_RE = re.compile(r'^(?:[^/]+_)?yc_inventory\.(?:yml|yaml)$')
+
     def verify_file(self, path):
         if not super().verify_file(path):
             return False
-        name = os.path.basename(path)
-        return any(
-            name == f'yc_inventory.{ext}' or name.endswith(f'_yc_inventory.{ext}')
-            for ext in ('yml', 'yaml')
-        )
+        return bool(self.INVENTORY_FILE_RE.match(os.path.basename(path)))
 
     def parse(self, inventory, loader, path, cache=True):
         super().parse(inventory, loader, path)

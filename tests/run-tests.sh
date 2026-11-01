@@ -309,6 +309,12 @@ expect_in "with yaml plugin" "$OUT"
 OUT="$("$AI" -vvv -i "$PWD/tests/myyc_inventory.yml" --list 2>&1)"
 expect_in "myhost" "$OUT"
 expect_in "did not pass its verify_file()" "$OUT"
+# Разделитель есть, а префикса перед ним нет: `_yc_inventory.yml` — не наше имя.
+# Без этой проверки плагин забирал бы файл, названный не по схеме, и падал на
+# нём с «Incorrect plugin name» — та же болезнь, что чинилась выше.
+OUT="$("$AI" -vvv -i "$PWD/tests/_yc_inventory.yml" --list 2>&1)"
+expect_in "underscorehost" "$OUT"
+expect_in "did not pass its verify_file()" "$OUT"
 
 echo
 echo "=== 9. Метка ansible=false в любом регистре (фикс №7) ==="
