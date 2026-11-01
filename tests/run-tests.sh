@@ -6,7 +6,7 @@
 #
 # Каждый сценарий содержит утверждения (assert): при регрессе скрипт падает
 # с ненулевым кодом и печатает, чего не хватало, — глазами сравнивать не нужно.
-# Сейчас: 18 сценариев, 127 проверок.
+# Сейчас: 19 сценариев, 133 проверки.
 #
 # Запуск:  ./tests/run-tests.sh
 set -euo pipefail
@@ -516,6 +516,36 @@ expect_in "pip install yandexcloud" "$OUT"
 expect_not_in "Unexpected Exception" "$OUT"
 expect_not_in "Traceback (most recent call last)" "$OUT"
 if [ "$RC" -ne 0 ]; then ok "код возврата ненулевой ($RC)"; else bad "код возврата 0 при ошибке"; fi
+
+echo
+echo "=== 15. Метаданные не разъехались: имя дистрибутива, версия, бейдж ==="
+# Идентичность дистрибутива живёт копиями: `name`/`version` в pyproject.toml,
+# строка «Версия форка» в docs/upstream-differences.md и команда установки в
+# обоих README. Ни одна копия не выводится из другой, поэтому расхождение после
+# переименования или релиза замечал читатель, а не стенд (так и вышло с
+# переименованием в 3.0.4). Разбор TOML — через tomllib: регуляркой по файлу
+# легко поймать чужое `name` из maintainers.
+read -r PY_NAME PY_VERSION DOC_VERSION < <(python3 - "$PWD" <<'PY'
+import re, sys, tomllib
+root = sys.argv[1]
+meta = tomllib.load(open(root + "/pyproject.toml", "rb"))["project"]
+text = open(root + "/docs/upstream-differences.md", encoding="utf-8").read()
+m = re.search(r"Версия форка — `([^`]+)`", text)
+print(meta["name"], meta["version"], m.group(1) if m else "")
+PY
+)
+printf '  имя: %s, версия: %s, версия в docs: %s\n' \
+    "$PY_NAME" "$PY_VERSION" "${DOC_VERSION:-<не найдена>}"
+# Версия в docs должна совпадать с pyproject: expect_line сравнивает строку
+# целиком, поэтому подходит как проверка равенства.
+expect_line "$DOC_VERSION" "$PY_VERSION"
+# Имя из pyproject должно быть тем, что README предлагает поставить с PyPI.
+expect_in "pip install $PY_NAME" "$(<"$PWD/README.md")"
+expect_in "pip install $PY_NAME" "$(<"$PWD/README.ru.md")"
+# Бейдж — в шапке обоих README (правило 18 в AGENTS.md), без ?branch=.
+expect_in "badge.svg)" "$(<"$PWD/README.md")"
+expect_in "badge.svg)" "$(<"$PWD/README.ru.md")"
+expect_no_line 'name = "ansible-yandex-cloud-inventory"' "$(<"$PWD/pyproject.toml")"
 
 echo
 if [ "$FAIL" -ne 0 ]; then
