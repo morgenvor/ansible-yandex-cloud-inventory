@@ -323,20 +323,12 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 
 ## Проверено на реальном облаке
 
-Кроме стенда, поведение проверено на живом каталоге Yandex Cloud: 2.x — инъекция
-метками, белый список, внутренний адрес у ВМ без публичного, постраничная выдача;
-3.0 — префикс `yc_`, двойной префикс, недопустимые значения `ansible_group`,
-адресация по имени с дефисом и приоритет `ansible_user` над `-u`. Детали — в
+Кроме стенда, поведение проверено на живом каталоге Yandex Cloud (метки, приоритет
+`ansible_user`, имена с дефисами, `group_vars`); детали — в
 [`docs/upstream-differences.md`](docs/upstream-differences.md), раздел 8.
 
-Свой каталог можно проверить тем же способом: [`tests/live-check.sh`](tests/live-check.sh)
-делает это **только на чтение** — читает inventory настоящим SDK и проверяет
-утверждения 3.0.0 (префикс `yc_`, валидация имени группы, адресация по имени с
-дефисом, наследование `group_vars`):
-
-```bash
-LIVE_INVENTORY=secrets/live_yc_inventory.yml ./tests/live-check.sh
-```
+Свой каталог проверяет [`tests/live-check.sh`](tests/live-check.sh) — он только
+читает облако: `LIVE_INVENTORY=secrets/live_yc_inventory.yml ./tests/live-check.sh`.
 
 ## Лицензия
 
