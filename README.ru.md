@@ -62,12 +62,16 @@ export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 ### Через `pip install` (и почему одного этого мало)
 
 Дистрибутив на PyPI называется `ansible-yandex-cloud-inventory-fixed`: имя
-`ansible-yandex-cloud-inventory` принадлежит upstream. Из исходников ставится
-тот же пакет, так что обе команды ниже дают одно и то же:
+`ansible-yandex-cloud-inventory` принадлежит upstream. Установка с PyPI:
 
 ```bash
-pip install ansible-yandex-cloud-inventory-fixed  # из PyPI
-pip install .                                     # из исходников
+pip install ansible-yandex-cloud-inventory-fixed
+```
+
+Тот же пакет ставится из исходников — берите один из двух вариантов, а не оба:
+
+```bash
+pip install .
 ```
 
 Пакет встанет в `site-packages` и будет виден как Python-модуль, но
@@ -87,8 +91,9 @@ export ANSIBLE_INVENTORY_PLUGINS="$(python -c 'import inventory_plugins, os; pri
 Проще всего — работать из исходников и держать `inventory_plugins = ./inventory_plugins`
 в `[defaults]` своего `ansible.cfg` (так устроен этот репозиторий).
 
-Учтите: `pip install .` — это ещё и шаг, который ставит SDK `yandexcloud`. Если
-вы копируете каталог плагина руками, поставьте SDK сами (`pip install
+Учтите: любая из двух установок выше — это ещё и шаг, который ставит SDK
+`yandexcloud`. Если вы копируете каталог плагина руками, поставьте SDK сами
+(`pip install
 yandexcloud`), иначе плагин остановится с явной ошибкой ровно об этом.
 
 ## Конфигурация
@@ -329,9 +334,9 @@ enable_plugins = yandex_cloud_inventory, yaml, ini, script, host_list
 ## Проверка без облака
 
 Стенд подменяет SDK заглушкой (`tests/fake_yc/`) и гоняет настоящий
-`ansible-inventory` по восемнадцати сценариям — от меток и адресов до
+`ansible-inventory` по девятнадцати сценариям — от меток и адресов до
 постраничной выдачи, `verify_file`, отказа API, инъекции метками и отсутствия
-самого SDK. Всего 127 проверок: при регрессе скрипт падает с ненулевым кодом и
+самого SDK. Всего 133 проверки: при регрессии скрипт падает с ненулевым кодом и
 печатает, какое утверждение не выполнено. Что именно покрыто — в
 [`docs/upstream-differences.md`](docs/upstream-differences.md), раздел 8.
 

@@ -65,12 +65,17 @@ export ANSIBLE_INVENTORY_PLUGINS=./inventory_plugins
 ### With `pip install` (and why that alone is not enough)
 
 The distribution on PyPI is called `ansible-yandex-cloud-inventory-fixed`: the
-name `ansible-yandex-cloud-inventory` belongs to upstream. The same package can
-be installed from a source checkout, so both commands below give one package:
+name `ansible-yandex-cloud-inventory` belongs to upstream. Install it from PyPI:
 
 ```bash
-pip install ansible-yandex-cloud-inventory-fixed  # from PyPI
-pip install .                                     # from the sources
+pip install ansible-yandex-cloud-inventory-fixed
+```
+
+The same package can be installed from a source checkout instead — use one of
+the two, not both:
+
+```bash
+pip install .
 ```
 
 The package lands in `site-packages` and is importable as a Python module, but
@@ -93,7 +98,7 @@ The simplest option is to work from the sources and keep
 `inventory_plugins = ./inventory_plugins` in `[defaults]` of your `ansible.cfg`
 (that is how this repository is set up).
 
-Note that `pip install .` is also the step that installs the `yandexcloud` SDK.
+Note that either `pip install` form above also installs the `yandexcloud` SDK.
 If you copy the plugin directory instead, install the SDK yourself
 (`pip install yandexcloud`), otherwise the plugin stops with an explicit error
 saying exactly that.
@@ -346,9 +351,9 @@ The versions verified for the test stand are pinned in `requirements-test.txt`
 ## Testing without a cloud
 
 The stand replaces the SDK with a stub (`tests/fake_yc/`) and runs the real
-`ansible-inventory` through eighteen scenarios — from labels and addresses to
+`ansible-inventory` through nineteen scenarios — from labels and addresses to
 pagination, `verify_file`, API failures, label-driven injection and a missing
-SDK. There are 127 assertions in total: on a regression the script exits
+SDK. There are 133 assertions in total: on a regression the script exits
 non-zero and prints which assertion failed. What exactly is covered is described
 in [`docs/upstream-differences.md`](docs/upstream-differences.md), section 8
 (Russian).
