@@ -2,6 +2,8 @@
 
 [Русский](README.ru.md) | **English**
 
+[![tests](https://github.com/morgenvor/ansible-yandex-cloud-inventory/actions/workflows/tests.yml/badge.svg)](https://github.com/morgenvor/ansible-yandex-cloud-inventory/actions/workflows/tests.yml)
+
 An Ansible dynamic inventory plugin for Yandex Cloud: it reads Compute instances
 and builds an inventory grouped by availability zone and by VM labels.
 

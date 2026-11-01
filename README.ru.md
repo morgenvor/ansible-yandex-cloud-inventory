@@ -2,6 +2,8 @@
 
 **Русский** | [English](README.md)
 
+[![tests](https://github.com/morgenvor/ansible-yandex-cloud-inventory/actions/workflows/tests.yml/badge.svg)](https://github.com/morgenvor/ansible-yandex-cloud-inventory/actions/workflows/tests.yml)
+
 Динамический inventory-плагин Ansible для Yandex Cloud: получает Compute-инстансы
 и строит inventory по зонам и меткам.
 
