@@ -242,7 +242,7 @@ print(sum(1 for h in hostvars
           if label(h) and not re.match(r"^[A-Za-z0-9][A-Za-z0-9_-]*$", label(h))))
 ')"
 if [ "${INVALID:-0}" -gt 0 ]; then
-    if printf '%s' "$ERR" | grep -q "недопустимо"; then
+    if [[ $ERR == *недопустимо* ]]; then
         ok "недопустимое значение метки сопровождается предупреждением"
     else
         bad "недопустимое значение метки есть, предупреждения нет"
@@ -259,7 +259,7 @@ print(sum(1 for h in hostvars
           if str(unwrap(hostvars[h].get("yc_label_ansible_group")) or "").strip().startswith("yc_")))
 ')"
 if [ "${DOUBLE:-0}" -gt 0 ]; then
-    if printf '%s' "$ERR" | grep -q "уже начинается с 'yc_'"; then
+    if [[ $ERR == *"уже начинается с 'yc_'"* ]]; then
         ok "значение с готовым префиксом даёт предупреждение о двойном префиксе"
     else
         bad "значение с готовым префиксом есть, предупреждения о двойном префиксе нет"
@@ -276,7 +276,7 @@ print(next((h for h in sorted(json.load(sys.stdin)["_meta"]["hostvars"]) if "-" 
 ')"
 if [ -n "$DASHED" ]; then
     OUT="$("$AI" -i "$INV" --host "$DASHED" 2>/dev/null)"
-    printf '%s' "$OUT" | grep -qF "yc_name" && ok "--host '$DASHED' находит хост" || bad "--host '$DASHED' хост не нашёл"
+    [[ $OUT == *yc_name* ]] && ok "--host '$DASHED' находит хост" || bad "--host '$DASHED' хост не нашёл"
     LIM="$("$AI" -i "$INV" --list --limit "$DASHED" 2>/dev/null)"
     CNT="$(hostcount "$LIM" 2>/dev/null || true)"
     [ "${CNT:-0}" = "1" ] && ok "--limit '$DASHED' оставляет ровно один хост" \
@@ -333,10 +333,10 @@ else
     printf 'from_plain_group: "yes"\n' >"$TMP/grp/group_vars/$BASE.yml"
     JSON2="$("$AI" -i "$TMP/grp/yc_inventory.yml" --list 2>/dev/null)"
     VARS="$(hostvars "$JSON2" "$HOST")"
-    printf '%s\n' "$VARS" | grep -qxF "$HOST from_yc_group = yes" \
+    [[ $'\n'$VARS$'\n' == *$'\n'"$HOST from_yc_group = yes"$'\n'* ]] \
         && ok "group_vars/$G.yml применился к хосту $HOST" \
         || bad "group_vars/$G.yml не применился к хосту $HOST"
-    if printf '%s' "$(hostkeys "$JSON2")" | grep -q "from_plain_group"; then
+    if [[ $(hostkeys "$JSON2") == *from_plain_group* ]]; then
         bad "сработал group_vars/$BASE.yml — метка снова достаёт до группы без префикса"
     else
         ok "group_vars/$BASE.yml не применился ни к одному хосту"
